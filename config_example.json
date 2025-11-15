@@ -1,0 +1,13 @@
+{
+  "l_freq": 0.5,
+  "h_freq": 40.0,
+  "epochs_tmin": -0.2,
+  "epochs_tmax": 0.8,
+  "baseline": [null, 0],
+  "reject_criteria": {
+    "eeg": 1.5e-04
+  },
+  "ica_n_components": 20,
+  "ica_method": "fastica",
+  "event_id": null
+}
