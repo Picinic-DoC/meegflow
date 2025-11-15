@@ -1,17 +1,19 @@
 # NICE EEG Preprocessing Pipeline
 
-A general EEG preprocessing pipeline using MNE-BIDS for reading data and preprocessing. The pipeline outputs clean preprocessed epochs and comprehensive reports in multiple formats for downstream analysis.
+A modular, configuration-driven EEG preprocessing pipeline using MNE-BIDS. The pipeline uses auxiliary functions for each preprocessing step, allowing you to choose which steps to run, their order, and their parameters through a simple JSON configuration.
 
 ## Features
 
 - **MNE-BIDS Integration**: Seamlessly reads EEG data in BIDS format
-- **Comprehensive Preprocessing**: Includes filtering, re-referencing, ICA-based artifact removal, and epoching
+- **Modular Design**: Each preprocessing step is a separate function
+- **Configuration-Driven**: Choose steps, their order, and parameters via JSON
 - **Multiple Output Formats**:
   - Clean preprocessed epochs in `.fif` format
+  - Clean preprocessed raw data in `.fif` format
   - Interactive HTML reports using MNE Report
   - JSON reports for easy downstream processing
-- **Configurable**: Fully customizable preprocessing parameters via JSON configuration
-- **Command-line Interface**: Easy to use from the terminal or integrate into batch processing scripts
+- **Batch Processing**: Process multiple subjects sequentially
+- **Command-line Interface**: Easy to use from the terminal
 
 ## Installation
 
@@ -28,28 +30,25 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Basic Command-Line Usage
+### Process Multiple Subjects
 
-Run the preprocessing pipeline on a single subject:
+Run the preprocessing pipeline on multiple subjects:
 
 ```bash
 python eeg_preprocessing_pipeline.py \
     --bids-root /path/to/bids/dataset \
-    --subject 01 \
+    --subjects 01 02 03 \
     --task rest \
-    --session 01
+    --config config_example.json
 ```
 
-### With Custom Configuration
-
-Create a configuration file (see `config_example.json`) and use it:
+Or with comma-separated subjects:
 
 ```bash
 python eeg_preprocessing_pipeline.py \
     --bids-root /path/to/bids/dataset \
-    --subject 01 \
-    --task rest \
-    --config my_config.json
+    --subjects "01,02,03" \
+    --task rest
 ```
 
 ### Python API Usage
@@ -59,153 +58,178 @@ You can also use the pipeline directly in Python:
 ```python
 from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
 
+# Load configuration
+import json
+with open('config_example.json', 'r') as f:
+    config = json.load(f)
+
 # Initialize pipeline
 pipeline = EEGPreprocessingPipeline(
     bids_root='/path/to/bids/dataset',
-    derivatives_root='/path/to/derivatives'
+    output_root='/path/to/derivatives',
+    config=config
 )
 
-# Run preprocessing
+# Run preprocessing on multiple subjects
 results = pipeline.run_pipeline(
-    subject='01',
-    session='01',
-    task='rest',
-    apply_ica=True
+    subjects=['01', '02', '03'],
+    task='rest'
 )
 
-# Access results
-epochs = results['epochs']
-preprocessing_info = results['preprocessing_info']
+# Access results for each subject
+for subject, result in results.items():
+    print(f"Subject {subject}: {result}")
 ```
 
 ## Output Structure
 
-The pipeline creates three derivative folders:
+The pipeline creates subject-specific folders with outputs based on the configured steps:
 
 ```
-derivatives/
-├── clean_epochs/          # Preprocessed epochs in .fif format
-│   └── sub-01_ses-01_task-rest_epo.fif
-├── html_reports/          # Interactive HTML reports
-│   └── sub-01_ses-01_task-rest_report.html
-└── json_reports/          # JSON reports for downstream analysis
-    └── sub-01_ses-01_task-rest_report.json
+derivatives/nice-preprocessing/
+└── sub-01/
+    ├── clean_epochs/
+    │   └── sub-01_task-rest_clean-epo.fif
+    ├── clean_raw/
+    │   └── sub-01_raw_clean.fif
+    └── reports/
+        ├── preprocessing_report.json
+        └── preprocessing_report.html
 ```
 
 ### Output Details
 
-1. **clean_epochs/**: Contains MNE epochs objects saved in `.fif` format
+1. **clean_epochs/**: Contains MNE epochs objects saved in `.fif` format (if epoching step is included)
    - Can be loaded with `mne.read_epochs()`
    - Includes all preprocessing (filtering, artifact removal, baseline correction)
 
-2. **html_reports/**: Interactive HTML reports generated with MNE Report
-   - Raw data visualization with PSD
-   - ICA components and artifact detection
-   - Cleaned epochs visualization
-   - Average evoked responses
+2. **clean_raw/**: Contains preprocessed raw data in `.fif` format (if save_clean_raw step is included)
+   - Can be loaded with `mne.io.read_raw_fif()`
+   - Includes preprocessing up to that point in the pipeline
 
-3. **json_reports/**: Structured JSON reports containing:
-   - Preprocessing parameters used
-   - Data quality metrics
-   - Number of epochs before/after rejection
-   - ICA components excluded
-   - Channel information
-   - Timestamps and metadata
+3. **reports/**: Contains preprocessing reports
+   - **JSON report**: Preprocessing parameters, quality metrics, steps performed
+   - **HTML report**: Interactive visualization (optional, if generate_html is true)
 
 ## Configuration
 
-The pipeline can be configured using a JSON file. Example configuration:
+The pipeline is configuration-driven. You define a list of preprocessing steps, their order, and parameters in a JSON file.
+
+### Available Steps
+
+- **load_data**: Load raw data into memory
+- **filter**: Apply bandpass filtering
+- **reference**: Apply re-referencing
+- **ica**: ICA-based artifact removal
+- **find_events**: Find events in the data
+- **epoch**: Create epochs around events
+- **save_clean_epochs**: Save epochs to .fif file
+- **save_clean_raw**: Save raw data to .fif file
+- **generate_report**: Generate JSON and HTML reports
+
+### Example Configuration
+
+See `config_example.json` for a full pipeline with epochs:
 
 ```json
 {
-  "l_freq": 0.5,              // High-pass filter (Hz)
-  "h_freq": 40.0,             // Low-pass filter (Hz)
-  "epochs_tmin": -0.2,        // Epoch start time (s)
-  "epochs_tmax": 0.8,         // Epoch end time (s)
-  "baseline": [null, 0],      // Baseline correction window
-  "reject_criteria": {        // Artifact rejection thresholds
-    "eeg": 1.5e-04           // 150 µV for EEG
-  },
-  "ica_n_components": 20,     // Number of ICA components
-  "ica_method": "fastica",    // ICA algorithm
-  "event_id": null            // Event IDs (null = use all)
+  "pipeline": [
+    {"name": "load_data"},
+    {"name": "filter", "l_freq": 0.5, "h_freq": 40.0},
+    {"name": "reference", "type": "average"},
+    {"name": "ica", "n_components": 20, "find_eog": true, "apply": true},
+    {"name": "find_events"},
+    {"name": "epoch", "tmin": -0.2, "tmax": 0.8, "baseline": [null, 0]},
+    {"name": "save_clean_epochs"},
+    {"name": "generate_report", "generate_html": true}
+  ]
+}
+```
+
+See `config_raw_only.json` for a simpler pipeline without epoching:
+
+```json
+{
+  "pipeline": [
+    {"name": "load_data"},
+    {"name": "filter", "l_freq": 1.0, "h_freq": 30.0},
+    {"name": "reference", "type": "average"},
+    {"name": "ica", "n_components": 15, "find_eog": true, "apply": true},
+    {"name": "save_clean_raw"},
+    {"name": "generate_report"}
+  ]
 }
 ```
 
 ## Command-Line Arguments
 
 - `--bids-root`: Path to BIDS root directory (required)
-- `--subject`: Subject ID (required)
-- `--session`: Session ID (optional)
+- `--subjects`: Subject ID(s) to process, space or comma-separated (required)
 - `--task`: Task name (optional)
-- `--run`: Run number (optional)
-- `--derivatives-root`: Custom derivatives path (optional)
-- `--no-ica`: Skip ICA application (optional)
+- `--output-root`: Custom output path (optional, defaults to `bids-root/derivatives/nice-preprocessing`)
 - `--config`: Path to JSON configuration file (optional)
 
-## Preprocessing Steps
+## Preprocessing Steps Details
 
-The pipeline performs the following steps:
+Each step can be customized through the configuration:
 
-1. **Data Loading**: Reads raw EEG data using MNE-BIDS
-2. **Filtering**: Applies bandpass filter (default: 0.5-40 Hz)
-3. **Re-referencing**: Sets average reference
-4. **ICA**: Removes artifacts using Independent Component Analysis
-   - Automatic detection of EOG artifacts
-   - Automatic detection of ECG artifacts
-5. **Epoching**: Creates epochs around events
-6. **Artifact Rejection**: Removes bad epochs based on amplitude criteria
-7. **Output Generation**: Saves epochs and generates reports
+### 1. load_data
+Loads raw data into memory. No parameters needed.
+
+### 2. filter
+Apply bandpass filtering.
+- `l_freq`: High-pass filter frequency (Hz)
+- `h_freq`: Low-pass filter frequency (Hz)
+
+### 3. reference
+Apply re-referencing.
+- `type`: Reference type ('average' or other)
+- `projection`: Whether to use projection (true/false)
+
+### 4. ica
+ICA-based artifact removal.
+- `n_components`: Number of ICA components
+- `method`: ICA method ('fastica', 'infomax', 'picard')
+- `find_eog`: Automatically find EOG artifacts (true/false)
+- `find_ecg`: Automatically find ECG artifacts (true/false)
+- `apply`: Apply ICA to remove artifacts (true/false)
+
+### 5. find_events
+Find events in the data.
+- `shortest_event`: Minimum event duration in samples
+
+### 6. epoch
+Create epochs around events.
+- `tmin`: Start time before event (seconds)
+- `tmax`: End time after event (seconds)
+- `baseline`: Baseline correction window (tuple or null)
+- `event_id`: Event IDs to include (dict or null for all)
+- `reject`: Rejection criteria (dict with channel type keys)
+
+### 7. save_clean_epochs
+Save epochs to .fif file. No parameters needed.
+
+### 8. save_clean_raw
+Save raw data to .fif file. No parameters needed.
+
+### 9. generate_report
+Generate JSON and optionally HTML reports.
+- `generate_html`: Whether to generate HTML report (true/false)
 
 ## Batch Processing
 
-For processing multiple subjects, create a simple bash script:
+The pipeline now processes multiple subjects sequentially. Simply pass multiple subject IDs:
 
 ```bash
-#!/bin/bash
-
-BIDS_ROOT="/path/to/bids/dataset"
-SUBJECTS=("01" "02" "03" "04")
-
-for subject in "${SUBJECTS[@]}"; do
-    python eeg_preprocessing_pipeline.py \
-        --bids-root "$BIDS_ROOT" \
-        --subject "$subject" \
-        --task rest \
-        --session 01
-done
-```
-
-## SLURM Integration
-
-For HPC environments with SLURM, create a submission script:
-
-```bash
-#!/bin/bash
-#SBATCH --job-name=eeg_preproc
-#SBATCH --output=logs/preproc_%A_%a.out
-#SBATCH --error=logs/preproc_%A_%a.err
-#SBATCH --array=1-20
-#SBATCH --time=02:00:00
-#SBATCH --mem=8G
-#SBATCH --cpus-per-task=4
-
-# Load required modules (adjust for your cluster)
-module load python/3.9
-
-# Activate virtual environment if needed
-# source /path/to/venv/bin/activate
-
-# Get subject ID from array task ID
-SUBJECT=$(printf "%02d" $SLURM_ARRAY_TASK_ID)
-
-# Run preprocessing
+# Process multiple subjects at once
 python eeg_preprocessing_pipeline.py \
     --bids-root /path/to/bids/dataset \
-    --subject $SUBJECT \
+    --subjects 01 02 03 04 05 \
     --task rest \
-    --session 01
+    --config config_example.json
 ```
+
+For HPC/cluster environments, you can create your own SLURM or other batch submission scripts that call the pipeline with subject lists.
 
 ## Requirements
 
