@@ -48,14 +48,17 @@ def test_pipeline_has_required_methods():
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
+    # Check for auxiliary step functions (new modular design)
     required_methods = [
-        "read_data",
-        "preprocess_raw",
-        "apply_ica",
-        "create_epochs",
-        "save_epochs",
-        "generate_html_report",
-        "generate_json_report",
+        "_step_load_data",
+        "_step_filter",
+        "_step_reference",
+        "_step_ica",
+        "_step_find_events",
+        "_step_epoch",
+        "_step_save_clean_epochs",
+        "_step_save_clean_raw",
+        "_step_generate_report",
         "run_pipeline"
     ]
     
@@ -72,16 +75,16 @@ def test_config_example_valid_json():
     with open(config_file, 'r') as f:
         config = json.load(f)
     
-    # Check for required keys
-    required_keys = [
-        "l_freq", "h_freq", "epochs_tmin", "epochs_tmax",
-        "baseline", "reject_criteria", "ica_n_components", "ica_method"
-    ]
+    # Check for pipeline configuration structure (new config format)
+    assert "pipeline" in config, "Config must have 'pipeline' key"
+    assert isinstance(config["pipeline"], list), "Pipeline must be a list of steps"
+    assert len(config["pipeline"]) > 0, "Pipeline must have at least one step"
     
-    for key in required_keys:
-        assert key in config, f"Required config key {key} not found"
+    # Check that steps have names
+    for step in config["pipeline"]:
+        assert "name" in step, "Each step must have a 'name' key"
     
-    print("✓ Config example is valid JSON with required keys")
+    print("✓ Config example is valid JSON with pipeline structure")
 
 
 def test_requirements_file_exists():
@@ -106,12 +109,12 @@ def test_output_directories_structure():
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
-    # Check that the three required output directories are mentioned
+    # Check that the output directories are mentioned (new structure with clean_raw and reports)
     assert "clean_epochs" in code, "clean_epochs directory not mentioned"
-    assert "html_reports" in code, "html_reports directory not mentioned"
-    assert "json_reports" in code, "json_reports directory not mentioned"
+    assert "clean_raw" in code, "clean_raw directory not mentioned"
+    assert "reports" in code, "reports directory not mentioned"
     
-    print("✓ All three output directories are configured")
+    print("✓ All output directories are configured")
 
 
 def test_readme_exists():
@@ -125,8 +128,8 @@ def test_readme_exists():
     required_sections = [
         "MNE-BIDS",
         "clean_epochs",
-        "html_reports",
-        "json_reports",
+        "clean_raw",
+        "reports",
         "Installation",
         "Usage"
     ]
@@ -137,18 +140,17 @@ def test_readme_exists():
     print("✓ README.md exists with required sections")
 
 
-def test_slurm_script_exists():
-    """Test that SLURM script exists."""
-    slurm_file = Path("run_slurm.sh")
-    assert slurm_file.exists(), "run_slurm.sh does not exist"
+def test_batch_processing_support():
+    """Test that the pipeline supports batch processing."""
+    pipeline_file = Path("eeg_preprocessing_pipeline.py")
+    with open(pipeline_file, 'r') as f:
+        code = f.read()
     
-    with open(slurm_file, 'r') as f:
-        content = f.read()
+    # Check that the pipeline supports multiple subjects
+    assert "--subjects" in code or "subjects" in code.lower(), "Batch processing support not found"
+    assert "run_pipeline" in code, "run_pipeline method not found"
     
-    assert "#SBATCH" in content, "SLURM directives not found"
-    assert "eeg_preprocessing_pipeline.py" in content, "Pipeline script not referenced"
-    
-    print("✓ SLURM script exists and is properly configured")
+    print("✓ Pipeline supports batch processing of multiple subjects")
 
 
 def test_example_usage_exists():
@@ -182,7 +184,7 @@ def run_all_tests():
         test_requirements_file_exists,
         test_output_directories_structure,
         test_readme_exists,
-        test_slurm_script_exists,
+        test_batch_processing_support,
         test_example_usage_exists,
     ]
     
