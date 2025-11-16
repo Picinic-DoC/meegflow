@@ -67,13 +67,14 @@ def test_pipeline_has_required_methods():
         print(f"✓ Method {method} found")
 
 
-def test_config_example_valid_json():
-    """Test that the example config is valid JSON."""
-    config_file = Path("config_example.json")
+def test_config_example_valid_yaml():
+    """Test that the example config is valid YAML."""
+    config_file = Path("config_example.yaml")
     assert config_file.exists(), "Config example file does not exist"
     
+    import yaml
     with open(config_file, 'r') as f:
-        config = json.load(f)
+        config = yaml.safe_load(f)
     
     # Check for pipeline configuration structure (new config format)
     assert "pipeline" in config, "Config must have 'pipeline' key"
@@ -84,7 +85,7 @@ def test_config_example_valid_json():
     for step in config["pipeline"]:
         assert "name" in step, "Each step must have a 'name' key"
     
-    print("✓ Config example is valid JSON with pipeline structure")
+    print("✓ Config example is valid YAML with pipeline structure")
 
 
 def test_requirements_file_exists():
@@ -180,7 +181,7 @@ def run_all_tests():
         test_pipeline_syntax,
         test_pipeline_has_required_classes,
         test_pipeline_has_required_methods,
-        test_config_example_valid_json,
+        test_config_example_valid_yaml,
         test_requirements_file_exists,
         test_output_directories_structure,
         test_readme_exists,

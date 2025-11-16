@@ -7,6 +7,7 @@ The pipeline is configuration-driven - you specify steps, their order, and param
 """
 from pathlib import Path
 import json
+import yaml
 import argparse
 from typing import Iterable, Union, Dict, Any, List, Callable
 import mne
@@ -672,7 +673,7 @@ def _parse_args():
         help='Subject ID(s) to process. Provide multiple subject IDs separated by spaces e.g. --subjects 01 02"'
     )
     parser.add_argument('--task', required=False, help='Optional BIDS task label.')
-    parser.add_argument('--config', required=False, help='Path to JSON config file with preprocessing parameters.')
+    parser.add_argument('--config', required=False, help='Path to YAML config file with preprocessing parameters.')
     return parser.parse_args()
 
 def main():
@@ -680,7 +681,7 @@ def main():
     config = {}
     if args.config:
         with open(args.config, 'r') as f:
-            config = json.load(f)
+            config = yaml.safe_load(f)
 
     pipeline = EEGPreprocessingPipeline(bids_root=args.bids_root, output_root=args.output_root, config=config)
     results = pipeline.run_pipeline(args.subjects, task=args.task)
