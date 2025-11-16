@@ -4,7 +4,7 @@ pipeline:
     l_freq: 0.5
     h_freq: 40.0
   - name: reference
-    type: average
+    ref_channels: average
     projection: false
   - name: ica
     n_components: 20
