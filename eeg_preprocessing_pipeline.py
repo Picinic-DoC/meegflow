@@ -1,4 +1,4 @@
-"""#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 EEG preprocessing pipeline using MNE-BIDS.
 
@@ -37,6 +37,22 @@ class EEGPreprocessingPipeline:
         unknown = [s.get('name') for s in pipeline_cfg if s.get('name') not in self.step_functions]
         if unknown:
             raise ValueError(f"Unknown pipeline steps in config: {unknown}")
+
+    def _get_pipeline_steps(self) -> List[Dict[str, Any]]:
+        """Retrieve the list of pipeline steps from the configuration."""
+        pipeline_steps = self.config.get('pipeline', [])
+
+        if not pipeline_steps:
+            pipeline_steps = [
+                {'name': 'load_data'},
+                {'name': 'bandpass_filter', 'l_freq': 0.5, 'h_freq': 45.0},
+                {'name': 'reference', 'type': 'average'},
+                {'name': 'save_clean_epochs'},
+                {'name': 'generate_json_report'},
+                {'name': 'generate_html_report'},
+            ]
+    
+        return pipeline_steps
 
     # Auxiliary functions for each preprocessing step
 
@@ -98,9 +114,6 @@ class EEGPreprocessingPipeline:
         )
 
         # Store info for reporting
-        if 'preprocessing_steps' not in data:
-            data['preprocessing_steps'] = []
-
         data['preprocessing_steps'].extend([
             {
                 'step': 'high_pass_filter',
@@ -147,9 +160,6 @@ class EEGPreprocessingPipeline:
         )
 
         # Store info for reporting
-        if 'preprocessing_steps' not in data:
-            data['preprocessing_steps'] = []
-
         data['preprocessing_steps'].append({
             'step': 'notch_filter',
             'picks': picks_params,
@@ -163,19 +173,13 @@ class EEGPreprocessingPipeline:
     def _step_reference(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Apply re-referencing."""
 
-        ref_type = step_config.get('type', 'average')
-        instance = step_config.get('instance', 'raw')
+        ref_channels = step_config.get('ref_channels', 'average')
+        instance = step_config.get('instance', 'epochs')
         projection = step_config.get('projection', True)
         apply = step_config.get('apply', True)
 
         if instance not in data:
-            raise ValueError(f"reference step requires '{instance}' to be present in data")
-
-        # ref_channels accepts list or 'average'
-        if ref_type == 'average':
-            ref_channels = 'average'
-        else:
-            ref_channels = ref_type
+            raise ValueError(f"reference step requires '{instance}' to be present in data (either 'raw' or 'epochs')")
 
         mne.set_eeg_reference(
             inst=data[instance],
@@ -184,12 +188,9 @@ class EEGPreprocessingPipeline:
             apply=apply,
         )
 
-        if 'preprocessing_steps' not in data:
-            data['preprocessing_steps'] = []
-
         data['preprocessing_steps'].append({
             'step': 'reference',
-            'type': ref_type,
+            'ref_channels': ref_channels,
             'projection': projection,
             'apply': apply
         })
@@ -243,8 +244,6 @@ class EEGPreprocessingPipeline:
 
         data['ica'] = ica
 
-        if 'preprocessing_steps' not in data:
-            data['preprocessing_steps'] = []
         data['preprocessing_steps'].append({
             'step': 'ica',
             'n_components': n_components,
@@ -263,9 +262,6 @@ class EEGPreprocessingPipeline:
         shortest_event = step_config.get('shortest_event', 1)
         events = mne.find_events(data['raw'], shortest_event=shortest_event)
         data['events'] = events
-
-        if 'preprocessing_steps' not in data:
-            data['preprocessing_steps'] = []
 
         data['preprocessing_steps'].append({
             'step': 'find_events',
@@ -296,8 +292,6 @@ class EEGPreprocessingPipeline:
             preload=True
         )
 
-        if 'preprocessing_steps' not in data:
-            data['preprocessing_steps'] = []
         data['preprocessing_steps'].append({
             'step': 'epoch',
             'event_id': event_id,
@@ -318,7 +312,7 @@ class EEGPreprocessingPipeline:
         overwrite = step_config.get('overwrite', True)
 
         # Derivatives root for this pipeline
-        deriv_root = Path(self.bids_root) / "derivatives" / "nice_preprocessing" / "epochs"
+        deriv_root = self.bids_root / "derivatives" / "nice_preprocessing" / "epochs"
 
         bids_path = BIDSPath(
             subject=data['subject'],
@@ -327,7 +321,7 @@ class EEGPreprocessingPipeline:
             acquisition=data.get('acquisition', None),
             run=data.get('run', None),
             datatype="eeg",
-            root=str(deriv_root),
+            root=deriv_root,
             suffix="epo",
             extension=".fif",
             processing="clean",
@@ -336,41 +330,18 @@ class EEGPreprocessingPipeline:
         )
 
         # Ensure directory exists
-        out_path = Path(bids_path.fpath)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
+        bids_path.mkdir(exist_ok=True)
 
         # Save epochs
-        data['epochs'].save(out_path, overwrite=overwrite)
+        data['epochs'].save(bids_path.fpath, overwrite=overwrite)
 
         # Store paths & metadata in the data dict
-        data['epochs_file'] = str(out_path)
+        data['epochs_file'] = str(bids_path)
         data['n_epochs'] = len(data['epochs'])
         return data
 
     def _step_generate_json_report(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Generate JSON reports."""
-
-        # Derivatives root for this pipeline
-        deriv_root = Path(self.bids_root) / "derivatives" / "nice_preprocessing" / "reports"
-
-        bids_path = BIDSPath(
-            subject=data['subject'],
-            task=data['task'],
-            session=data.get('session', None),
-            acquisition=data.get('acquisition', None),
-            run=data.get('run', None),
-            datatype="eeg",
-            root=str(deriv_root),
-            suffix="report",
-            extension=".json",
-            processing="clean",
-            description="cleaned",
-            check=False,
-        )
-
-        # Ensure directory exists
-        out_path = Path(bids_path.fpath)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
 
         # JSON report
         report = {
@@ -389,17 +360,8 @@ class EEGPreprocessingPipeline:
                 n_times=data['raw'].n_times
             )
 
-        with open(out_path, 'w') as f:
-            json.dump(report, f, indent=2)
-
-        data['json_report'] = str(out_path)
-        return data
-
-    def _step_generate_html_report(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate HTML reports."""
-
         # Derivatives root for this pipeline
-        deriv_root = Path(self.bids_root) / "derivatives" / "nice_preprocessing" / "reports"
+        deriv_root = self.bids_root / "derivatives" / "nice_preprocessing" / "reports"
 
         bids_path = BIDSPath(
             subject=data['subject'],
@@ -408,17 +370,25 @@ class EEGPreprocessingPipeline:
             acquisition=data.get('acquisition', None),
             run=data.get('run', None),
             datatype="eeg",
-            root=str(deriv_root),
+            root=deriv_root,
             suffix="report",
-            extension=".html",
+            extension=".json",
             processing="clean",
             description="cleaned",
             check=False,
         )
 
         # Ensure directory exists
-        subject_out = Path(bids_path.fpath).parent
-        subject_out.mkdir(parents=True, exist_ok=True)
+        bids_path.mkdir(exist_ok=True)
+
+        with open(bids_path.fpath, 'w') as f:
+            json.dump(report, f, indent=2)
+
+        data['json_report'] = str(bids_path)
+        return data
+
+    def _step_generate_html_report(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate HTML reports."""
 
         html_report = mne.Report(title=f'Preprocessing Report - Subject {data["subject"]}')
 
@@ -437,10 +407,30 @@ class EEGPreprocessingPipeline:
             except Exception:
                 pass
 
-        html_file = subject_out / 'preprocessing_report.html'
-        html_report.save(str(html_file), overwrite=True, open_browser=False)
+        # Derivatives root for this pipeline
+        deriv_root = self.bids_root / "derivatives" / "nice_preprocessing" / "reports"
 
-        data['html_report'] = str(html_file)
+        bids_path = BIDSPath(
+            subject=data['subject'],
+            task=data['task'],
+            session=data.get('session', None),
+            acquisition=data.get('acquisition', None),
+            run=data.get('run', None),
+            datatype="eeg",
+            root=deriv_root,
+            suffix="report",
+            extension=".html",
+            processing="clean",
+            description="cleaned",
+            check=False,
+        )
+
+        # Ensure directory exists
+        bids_path.mkdir(exist_ok=True)
+
+        html_report.save(bids_path.fpath, overwrite=True, open_browser=False)
+
+        data['html_report'] = str(bids_path)
         return data
 
     def _process_single_recording(self, bids_path: BIDSPath) -> Dict[str, Any]:
@@ -459,18 +449,7 @@ class EEGPreprocessingPipeline:
         data['raw'] = read_raw_bids(bids_path=bids_path)
 
         # Get pipeline steps from config
-        pipeline_steps = self.config.get('pipeline', [])
-
-        # If no pipeline is specified, use default steps (names must match self.step_functions)
-        if not pipeline_steps:
-            pipeline_steps = [
-                {'name': 'load_data'},
-                {'name': 'bandpass_filter', 'l_freq': 0.5, 'h_freq': 45.0},
-                {'name': 'reference', 'type': 'average'},
-                {'name': 'save_clean_epochs'},
-                {'name': 'generate_json_report'},
-                {'name': 'generate_html_report'},
-            ]
+        pipeline_steps = self._get_pipeline_steps()
 
         # Execute each step in order
         for step in pipeline_steps:
@@ -513,7 +492,7 @@ class EEGPreprocessingPipeline:
         for subject in subjects:
 
             base_path = BIDSPath(
-                root=str(self.bids_root),
+                root=self.bids_root,
                 subject=subject,
                 task=task,
                 datatype='eeg',
