@@ -13,48 +13,20 @@ import mne
 from mne.utils import logger
 
 
-def _find_outliers(X, threshold=3.0, max_iter=2, tail=0):
-    """Find outliers based on iterated Z-scoring.
+def _iteratively_find_outliers(X, threshold=3.0, max_iter=4):
+    """Find outliers based on iterated Z-scoring. """
 
-    This procedure compares the absolute z-score against the threshold.
-    After excluding local outliers, the comparison is repeated until no
-    local outlier is present any more.
-
-    Parameters
-    ----------
-    X : np.ndarray of float, shape (n_elements,)
-        The scores for which to find outliers.
-    threshold : float
-        The value above which a feature is classified as outlier.
-    max_iter : int
-        The maximum number of iterations.
-    tail : {0, 1, -1}
-        Whether to search for outliers on both extremes of the z-scores (0),
-        or on just the positive (1) or negative (-1) side.
-
-    Returns
-    -------
-    bad_idx : np.ndarray of int, shape (n_features)
-        The outlier indices.
-    """
-    my_mask = np.zeros(len(X), dtype=bool)
+    X = np.ma.masked_array(X, mask=False)
     for _ in range(max_iter):
-        X = np.ma.masked_array(X, my_mask)
-        if tail == 0:
-            this_z = np.abs(zscore(X))
-        elif tail == 1:
-            this_z = zscore(X)
-        elif tail == -1:
-            this_z = -zscore(X)
-        else:
-            raise ValueError(f"Tail parameter {tail} not recognised.")
-        local_bad = this_z > threshold
-        my_mask = np.max([my_mask, local_bad], 0)
-        if not np.any(local_bad):
+        
+        X_z = np.abs(zscore(X))
+        current_bad = X_z > threshold
+        if np.all(~current_bad):
             break
+        
+        X.mask |= current_bad
 
-    bad_idx = np.where(my_mask)[0]
-    return bad_idx
+    return np.where(X.mask)[0]
 
 
 def find_bads_channels_threshold(epochs, picks, reject, n_epochs_bad_ch=0.5):
@@ -97,7 +69,7 @@ def find_bads_channels_variance(inst, picks, zscore_thresh=4, max_iter=2):
     if len(exclude) > 0:
         masked_data[:, exclude, :] = np.ma.masked
     ch_var = np.ma.hstack(masked_data).var(axis=-1)
-    bad_ch_var = _find_outliers(
+    bad_ch_var = _iteratively_find_outliers(
         ch_var, threshold=zscore_thresh, max_iter=max_iter)
     logger.info('Reject by variance: bad_channels: %s' % bad_ch_var)
     bad_chs = list({inst.ch_names[i] for i in bad_ch_var})
@@ -120,7 +92,7 @@ def find_bads_channels_high_frequency(inst, picks, zscore_thresh=4, max_iter=2):
     filt_masked_data = np.ma.masked_array(filt_data, fill_value=np.nan)
     if len(exclude) > 0:
         filt_masked_data[exclude, :] = np.ma.masked
-    bad_ch_hf = _find_outliers(
+    bad_ch_hf = _iteratively_find_outliers(
         filt_masked_data.std(axis=-1), threshold=zscore_thresh,
         max_iter=max_iter)
     logger.info('Reject by high frequency std: bad_channels: %s' % bad_ch_hf)
