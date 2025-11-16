@@ -11,6 +11,7 @@ import argparse
 from typing import Iterable, Union, Dict, Any, List, Callable
 import mne
 from mne_bids import BIDSPath, read_raw_bids
+import adaptive_reject
 
 
 class EEGPreprocessingPipeline:
@@ -27,6 +28,10 @@ class EEGPreprocessingPipeline:
             'ica': self._step_ica,
             'find_events': self._step_find_events,
             'epoch': self._step_epoch,
+            'find_bads_channels_threshold': self._step_find_bads_channels_threshold,
+            'find_bads_channels_variance': self._step_find_bads_channels_variance,
+            'find_bads_channels_high_frequency': self._step_find_bads_channels_high_frequency,
+            'find_bads_epochs_threshold': self._step_find_bads_epochs_threshold,
             'save_clean_epochs': self._step_save_clean_epochs,
             'generate_json_report': self._step_generate_json_report,
             'generate_html_report': self._step_generate_html_report,
@@ -54,6 +59,12 @@ class EEGPreprocessingPipeline:
     
         return pipeline_steps
 
+    def _get_picks(self, info: mne.Info, picks_params: Any) -> List[int]:
+        # Compute picks if provided
+        if isinstance(picks_params, (list, tuple)):
+            return  mne.pick_types(info, *picks_params)
+        return None
+
     # Auxiliary functions for each preprocessing step
 
     def _step_load_data(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -75,16 +86,7 @@ class EEGPreprocessingPipeline:
         n_jobs = step_config.get('n_jobs', 1)
 
         # Compute picks if provided, otherwise None (all channels)
-        picks = None
-        if picks_params is not None:
-            try:
-                if isinstance(picks_params, (list, tuple)):
-                    picks = mne.pick_types(data['raw'].info, *picks_params)
-                else:
-                    # allow string like 'eeg'
-                    picks = mne.pick_types(data['raw'].info, eeg=('eeg' in str(picks_params).lower()))
-            except Exception:
-                picks = None
+        picks = self._get_picks(data['raw'].info, picks_params)
 
         # Apply filtering in 2 steps: high-pass and low-pass
         high_pass_filter_params = dict(
@@ -141,15 +143,7 @@ class EEGPreprocessingPipeline:
         n_jobs = step_config.get('n_jobs', 1)
 
         # Compute picks if provided
-        picks = None
-        if picks_params is not None:
-            try:
-                if isinstance(picks_params, (list, tuple)):
-                    picks = mne.pick_types(data['raw'].info, *picks_params)
-                else:
-                    picks = None
-            except Exception:
-                picks = None
+        picks = self._get_picks(data['raw'].info, picks_params)
 
         data['raw'].notch_filter(
             freqs=freqs,
@@ -300,6 +294,162 @@ class EEGPreprocessingPipeline:
             'baseline': baseline,
             'reject': reject,
             'n_epochs': len(data['epochs'])
+        })
+
+        return data
+
+    def _step_find_bads_channels_threshold(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Find bad channels using threshold-based rejection."""
+        if 'epochs' not in data:
+            raise ValueError("find_bads_channels_threshold requires 'epochs' in data")
+
+        picks_params = step_config.get('picks', None)
+        reject = step_config.get('reject', {'eeg': 150e-6})
+        n_epochs_bad_ch = step_config.get('n_epochs_bad_ch', 0.5)
+        apply_on = step_config.get('apply_on', ['epochs'])
+
+        if not isinstance(apply_on, list):
+            apply_on = [apply_on]
+
+        if any(inst not in data for inst in apply_on):
+            raise ValueError(f"find_bads_channels_threshold requires all instances of apply_on ({apply_on}) to be present in data")
+
+        picks = self._get_picks(data['raw'].info, picks_params)
+
+        bad_chs = adaptive_reject.find_bads_channels_threshold(
+            data['epochs'], picks, reject, n_epochs_bad_ch
+        )
+
+        if bad_chs:
+            for instance_name in apply_on:
+                data[instance_name].info['bads'].extend([ch for ch in bad_chs if ch not in data[instance_name].info['bads']])
+
+        data['preprocessing_steps'].append({
+            'step': 'find_bads_channels_threshold',
+            'picks': picks_params,
+            'apply_on': apply_on,
+            'reject': reject,
+            'n_epochs_bad_ch': n_epochs_bad_ch,
+            'bad_channels': bad_chs,
+            'n_bad_channels': len(bad_chs)
+        })
+
+        return data
+
+    def _step_find_bads_channels_variance(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Find bad channels using variance-based detection."""
+        # Check which instance to use
+        instance_name = step_config.get('instance', 'epochs')
+        if instance_name not in data:
+            raise ValueError(f"find_bads_channels_variance requires '{instance_name}' in data")
+
+        picks_params = step_config.get('picks', None)
+        inst = data[instance_name]
+        zscore_thresh = step_config.get('zscore_thresh', 4)
+        max_iter = step_config.get('max_iter', 2)
+        apply_on = step_config.get('apply_on', [instance_name])
+
+        if not isinstance(apply_on, list):
+            apply_on = [apply_on]
+
+        if any(inst not in data for inst in apply_on):
+            raise ValueError(f"find_bads_channels_threshold requires all instances of apply_on ({apply_on}) to be present in data")
+
+        picks = self._get_picks(data['raw'].info, picks_params)
+
+        bad_chs = adaptive_reject.find_bads_channels_variance(
+            inst, picks, zscore_thresh, max_iter
+        )
+
+        # Mark channels as bad
+        if bad_chs:
+            for instance_name in apply_on:
+                data[instance_name].info['bads'].extend([ch for ch in bad_chs if ch not in data[instance_name].info['bads']])
+
+        data['preprocessing_steps'].append({
+            'step': 'find_bads_channels_variance',
+            'instance': instance_name,
+            'picks': picks_params,
+            'apply_on': apply_on,
+            'zscore_thresh': zscore_thresh,
+            'max_iter': max_iter,
+            'bad_channels': bad_chs,
+            'n_bad_channels': len(bad_chs)
+        })
+
+        return data
+
+    def _step_find_bads_channels_high_frequency(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Find bad channels using high-frequency variance."""
+        # Check which instance to use
+        instance_name = step_config.get('instance', 'epochs')
+        if instance_name not in data:
+            raise ValueError(f"find_bads_channels_high_frequency requires '{instance_name}' in data")
+
+        picks_params = step_config.get('picks', None)
+        inst = data[instance_name]
+        zscore_thresh = step_config.get('zscore_thresh', 4)
+        max_iter = step_config.get('max_iter', 2)
+        apply_on = step_config.get('apply_on', [instance_name])
+
+        if not isinstance(apply_on, list):
+            apply_on = [apply_on]
+        
+        if any(inst not in data for inst in apply_on):
+            raise ValueError(f"find_bads_channels_threshold requires all instances of apply_on ({apply_on}) to be present in data")
+
+        picks = self._get_picks(data['raw'].info, picks_params)
+
+        bad_chs = adaptive_reject.find_bads_channels_high_frequency(
+            inst, picks, zscore_thresh, max_iter
+        )
+
+        # Mark channels as bad
+        if bad_chs:
+            for instance_name in apply_on:
+                data[instance_name].info['bads'].extend([ch for ch in bad_chs if ch not in data[instance_name].info['bads']])
+
+        data['preprocessing_steps'].append({
+            'step': 'find_bads_channels_high_frequency',
+            'instance': instance_name,
+            'picks': picks_params,
+            'apply_on': apply_on,
+            'zscore_thresh': zscore_thresh,
+            'max_iter': max_iter,
+            'bad_channels': bad_chs,
+            'n_bad_channels': len(bad_chs)
+        })
+
+        return data
+
+    def _step_find_bads_epochs_threshold(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Find bad epochs using threshold-based rejection."""
+        if 'epochs' not in data:
+            raise ValueError("find_bads_epochs_threshold requires 'epochs' in data")
+
+        picks_params = step_config.get('picks', None)
+        reject = step_config.get('reject', {'eeg': 150e-6})
+        n_channels_bad_epoch = step_config.get('n_channels_bad_epoch', 0.1)
+
+        picks = self._get_picks(data['raw'].info, picks_params)
+
+        bad_epochs = adaptive_reject.find_bads_epochs_threshold(
+            data['epochs'], picks, reject, n_channels_bad_epoch
+        )
+
+        # Drop bad epochs
+        if len(bad_epochs) > 0:
+            data['epochs'].drop(bad_epochs, reason='ADAPTIVE AUTOREJECT')
+
+        data['preprocessing_steps'].append({
+            'step': 'find_bads_epochs_threshold',
+            'picks': picks_params,
+            'apply_on': ['epochs'], # only for compatibility with others reject steps
+            'reject': reject,
+            'n_channels_bad_epoch': n_channels_bad_epoch,
+            'bad_epochs': bad_epochs.tolist() if hasattr(bad_epochs, 'tolist') else list(bad_epochs),
+            'n_bad_epochs': len(bad_epochs),
+            'n_epochs_remaining': len(data['epochs'])
         })
 
         return data
