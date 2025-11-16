@@ -11,6 +11,7 @@ import argparse
 from typing import Iterable, Union, Dict, Any, List, Callable
 import mne
 from mne_bids import BIDSPath, read_raw_bids
+import adaptive_reject
 
 
 class EEGPreprocessingPipeline:
@@ -27,6 +28,10 @@ class EEGPreprocessingPipeline:
             'ica': self._step_ica,
             'find_events': self._step_find_events,
             'epoch': self._step_epoch,
+            'find_bads_channels_threshold': self._step_find_bads_channels_threshold,
+            'find_bads_channels_variance': self._step_find_bads_channels_variance,
+            'find_bads_channels_high_frequency': self._step_find_bads_channels_high_frequency,
+            'find_bads_epochs_threshold': self._step_find_bads_epochs_threshold,
             'save_clean_epochs': self._step_save_clean_epochs,
             'generate_json_report': self._step_generate_json_report,
             'generate_html_report': self._step_generate_html_report,
@@ -300,6 +305,123 @@ class EEGPreprocessingPipeline:
             'baseline': baseline,
             'reject': reject,
             'n_epochs': len(data['epochs'])
+        })
+
+        return data
+
+    def _step_find_bads_channels_threshold(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Find bad channels using threshold-based rejection."""
+        if 'epochs' not in data:
+            raise ValueError("find_bads_channels_threshold requires 'epochs' in data")
+
+        picks = step_config.get('picks', mne.pick_types(data['epochs'].info, eeg=True, eog=False, meg=False))
+        reject = step_config.get('reject', {'eeg': 150e-6})
+        n_epochs_bad_ch = step_config.get('n_epochs_bad_ch', 0.5)
+
+        bad_chs = adaptive_reject.find_bads_channels_threshold(
+            data['epochs'], picks, reject, n_epochs_bad_ch
+        )
+
+        # Mark channels as bad
+        if bad_chs:
+            data['epochs'].info['bads'].extend([ch for ch in bad_chs if ch not in data['epochs'].info['bads']])
+
+        data['preprocessing_steps'].append({
+            'step': 'find_bads_channels_threshold',
+            'reject': reject,
+            'n_epochs_bad_ch': n_epochs_bad_ch,
+            'bad_channels': bad_chs,
+            'n_bad_channels': len(bad_chs)
+        })
+
+        return data
+
+    def _step_find_bads_channels_variance(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Find bad channels using variance-based detection."""
+        # Check which instance to use
+        instance_name = step_config.get('instance', 'epochs')
+        if instance_name not in data:
+            raise ValueError(f"find_bads_channels_variance requires '{instance_name}' in data")
+
+        inst = data[instance_name]
+        picks = step_config.get('picks', mne.pick_types(inst.info, eeg=True, eog=False, meg=False))
+        zscore_thresh = step_config.get('zscore_thresh', 4)
+        max_iter = step_config.get('max_iter', 2)
+
+        bad_chs = adaptive_reject.find_bads_channels_variance(
+            inst, picks, zscore_thresh, max_iter
+        )
+
+        # Mark channels as bad
+        if bad_chs:
+            inst.info['bads'].extend([ch for ch in bad_chs if ch not in inst.info['bads']])
+
+        data['preprocessing_steps'].append({
+            'step': 'find_bads_channels_variance',
+            'instance': instance_name,
+            'zscore_thresh': zscore_thresh,
+            'max_iter': max_iter,
+            'bad_channels': bad_chs,
+            'n_bad_channels': len(bad_chs)
+        })
+
+        return data
+
+    def _step_find_bads_channels_high_frequency(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Find bad channels using high-frequency variance."""
+        # Check which instance to use
+        instance_name = step_config.get('instance', 'epochs')
+        if instance_name not in data:
+            raise ValueError(f"find_bads_channels_high_frequency requires '{instance_name}' in data")
+
+        inst = data[instance_name]
+        picks = step_config.get('picks', mne.pick_types(inst.info, eeg=True, eog=False, meg=False))
+        zscore_thresh = step_config.get('zscore_thresh', 4)
+        max_iter = step_config.get('max_iter', 2)
+
+        bad_chs = adaptive_reject.find_bads_channels_high_frequency(
+            inst, picks, zscore_thresh, max_iter
+        )
+
+        # Mark channels as bad
+        if bad_chs:
+            inst.info['bads'].extend([ch for ch in bad_chs if ch not in inst.info['bads']])
+
+        data['preprocessing_steps'].append({
+            'step': 'find_bads_channels_high_frequency',
+            'instance': instance_name,
+            'zscore_thresh': zscore_thresh,
+            'max_iter': max_iter,
+            'bad_channels': bad_chs,
+            'n_bad_channels': len(bad_chs)
+        })
+
+        return data
+
+    def _step_find_bads_epochs_threshold(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Find bad epochs using threshold-based rejection."""
+        if 'epochs' not in data:
+            raise ValueError("find_bads_epochs_threshold requires 'epochs' in data")
+
+        picks = step_config.get('picks', mne.pick_types(data['epochs'].info, eeg=True, eog=False, meg=False))
+        reject = step_config.get('reject', {'eeg': 150e-6})
+        n_channels_bad_epoch = step_config.get('n_channels_bad_epoch', 0.1)
+
+        bad_epochs = adaptive_reject.find_bads_epochs_threshold(
+            data['epochs'], picks, reject, n_channels_bad_epoch
+        )
+
+        # Drop bad epochs
+        if len(bad_epochs) > 0:
+            data['epochs'].drop(bad_epochs, reason='AUTOREJECT')
+
+        data['preprocessing_steps'].append({
+            'step': 'find_bads_epochs_threshold',
+            'reject': reject,
+            'n_channels_bad_epoch': n_channels_bad_epoch,
+            'bad_epochs': bad_epochs.tolist() if hasattr(bad_epochs, 'tolist') else list(bad_epochs),
+            'n_bad_epochs': len(bad_epochs),
+            'n_epochs_remaining': len(data['epochs'])
         })
 
         return data
