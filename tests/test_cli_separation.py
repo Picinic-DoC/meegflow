@@ -45,6 +45,7 @@ def test_cli_has_arg_parser():
     assert "ArgumentParser" in code, "ArgumentParser not used in CLI"
     assert "--bids-root" in code, "--bids-root argument not found"
     assert "--subjects" in code, "--subjects argument not found"
+    assert "--tasks" in code, "--tasks argument not found"
     print("✓ CLI has argument parser with required arguments")
 
 
