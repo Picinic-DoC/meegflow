@@ -11,17 +11,22 @@ import ast
 import json
 from pathlib import Path
 
+# Find the repository root
+repo_root = Path(__file__).parent.parent
+src_dir = repo_root / "src"
+configs_dir = repo_root / "configs"
+
 
 def test_pipeline_file_exists():
     """Test that the main pipeline file exists."""
-    pipeline_file = Path("eeg_preprocessing_pipeline.py")
+    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
     assert pipeline_file.exists(), "Pipeline file does not exist"
     print("✓ Pipeline file exists")
 
 
 def test_pipeline_syntax():
     """Test that the pipeline file has valid Python syntax."""
-    pipeline_file = Path("eeg_preprocessing_pipeline.py")
+    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -34,7 +39,7 @@ def test_pipeline_syntax():
 
 def test_pipeline_has_required_classes():
     """Test that the pipeline file contains required classes."""
-    pipeline_file = Path("eeg_preprocessing_pipeline.py")
+    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -44,21 +49,22 @@ def test_pipeline_has_required_classes():
 
 def test_pipeline_has_required_methods():
     """Test that the pipeline class has required methods."""
-    pipeline_file = Path("eeg_preprocessing_pipeline.py")
+    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
     # Check for auxiliary step functions (new modular design)
     required_methods = [
         "_step_load_data",
-        "_step_filter",
+        "_step_bandpass_filter",
+        "_step_notch_filter",
         "_step_reference",
         "_step_ica",
         "_step_find_events",
         "_step_epoch",
         "_step_save_clean_epochs",
-        "_step_save_clean_raw",
-        "_step_generate_report",
+        "_step_generate_json_report",
+        "_step_generate_html_report",
         "run_pipeline"
     ]
     
@@ -67,13 +73,14 @@ def test_pipeline_has_required_methods():
         print(f"✓ Method {method} found")
 
 
-def test_config_example_valid_json():
-    """Test that the example config is valid JSON."""
-    config_file = Path("config_example.json")
+def test_config_example_valid_yaml():
+    """Test that the example config is valid YAML."""
+    config_file = configs_dir / "config_example.yaml"
     assert config_file.exists(), "Config example file does not exist"
     
+    import yaml
     with open(config_file, 'r') as f:
-        config = json.load(f)
+        config = yaml.safe_load(f)
     
     # Check for pipeline configuration structure (new config format)
     assert "pipeline" in config, "Config must have 'pipeline' key"
@@ -84,18 +91,18 @@ def test_config_example_valid_json():
     for step in config["pipeline"]:
         assert "name" in step, "Each step must have a 'name' key"
     
-    print("✓ Config example is valid JSON with pipeline structure")
+    print("✓ Config example is valid YAML with pipeline structure")
 
 
 def test_requirements_file_exists():
     """Test that requirements.txt exists and contains necessary packages."""
-    req_file = Path("requirements.txt")
+    req_file = repo_root / "requirements.txt"
     assert req_file.exists(), "requirements.txt does not exist"
     
     with open(req_file, 'r') as f:
         requirements = f.read()
     
-    required_packages = ["mne", "mne-bids", "numpy", "scipy"]
+    required_packages = ["mne", "mne-bids", "numpy", "scipy", "PyYAML"]
     
     for package in required_packages:
         assert package in requirements, f"Required package {package} not in requirements.txt"
@@ -105,13 +112,12 @@ def test_requirements_file_exists():
 
 def test_output_directories_structure():
     """Test that the pipeline creates correct output directory structure."""
-    pipeline_file = Path("eeg_preprocessing_pipeline.py")
+    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
-    # Check that the output directories are mentioned (new structure with clean_raw and reports)
-    assert "clean_epochs" in code, "clean_epochs directory not mentioned"
-    assert "clean_raw" in code, "clean_raw directory not mentioned"
+    # Check that the output directories are mentioned (reports and epochs)
+    assert "epochs" in code, "epochs directory not mentioned"
     assert "reports" in code, "reports directory not mentioned"
     
     print("✓ All output directories are configured")
@@ -119,7 +125,7 @@ def test_output_directories_structure():
 
 def test_readme_exists():
     """Test that README exists and mentions key features."""
-    readme_file = Path("README.md")
+    readme_file = repo_root / "README.md"
     assert readme_file.exists(), "README.md does not exist"
     
     with open(readme_file, 'r') as f:
@@ -127,11 +133,11 @@ def test_readme_exists():
     
     required_sections = [
         "MNE-BIDS",
-        "clean_epochs",
-        "clean_raw",
+        "epochs",
         "reports",
         "Installation",
-        "Usage"
+        "Usage",
+        "YAML"
     ]
     
     for section in required_sections:
@@ -142,7 +148,7 @@ def test_readme_exists():
 
 def test_batch_processing_support():
     """Test that the pipeline supports batch processing."""
-    pipeline_file = Path("eeg_preprocessing_pipeline.py")
+    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -155,7 +161,7 @@ def test_batch_processing_support():
 
 def test_example_usage_exists():
     """Test that example usage script exists."""
-    example_file = Path("example_usage.py")
+    example_file = repo_root / "example_usage.py"
     assert example_file.exists(), "example_usage.py does not exist"
     
     with open(example_file, 'r') as f:
@@ -180,7 +186,7 @@ def run_all_tests():
         test_pipeline_syntax,
         test_pipeline_has_required_classes,
         test_pipeline_has_required_methods,
-        test_config_example_valid_json,
+        test_config_example_valid_yaml,
         test_requirements_file_exists,
         test_output_directories_structure,
         test_readme_exists,

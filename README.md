@@ -1,12 +1,12 @@
 # NICE EEG Preprocessing Pipeline
 
-A modular, configuration-driven EEG preprocessing pipeline using MNE-BIDS. The pipeline uses auxiliary functions for each preprocessing step, allowing you to choose which steps to run, their order, and their parameters through a simple JSON configuration.
+A modular, configuration-driven EEG preprocessing pipeline using MNE-BIDS. The pipeline uses auxiliary functions for each preprocessing step, allowing you to choose which steps to run, their order, and their parameters through a simple YAML configuration.
 
 ## Features
 
 - **MNE-BIDS Integration**: Seamlessly reads EEG data in BIDS format
 - **Modular Design**: Each preprocessing step is a separate function
-- **Configuration-Driven**: Choose steps, their order, and parameters via JSON
+- **Configuration-Driven**: Choose steps, their order, and parameters via YAML
 - **Multiple Output Formats**:
   - Clean preprocessed epochs in `.fif` format
   - Clean preprocessed raw data in `.fif` format
@@ -39,7 +39,7 @@ python eeg_preprocessing_pipeline.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 03 \
     --task rest \
-    --config config_example.json
+    --config config_example.yaml
 ```
 
 Or with comma-separated subjects:
@@ -59,9 +59,9 @@ You can also use the pipeline directly in Python:
 from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
 
 # Load configuration
-import json
-with open('config_example.json', 'r') as f:
-    config = json.load(f)
+import yaml
+with open('config_example.yaml', 'r') as f:
+    config = yaml.safe_load(f)
 
 # Initialize pipeline
 pipeline = EEGPreprocessingPipeline(
@@ -113,7 +113,7 @@ derivatives/nice-preprocessing/
 
 ## Configuration
 
-The pipeline is configuration-driven. You define a list of preprocessing steps, their order, and parameters in a JSON file.
+The pipeline is configuration-driven. You define a list of preprocessing steps, their order, and parameters in a YAML file.
 
 ### Available Steps
 
@@ -133,57 +133,81 @@ The pipeline is configuration-driven. You define a list of preprocessing steps, 
 
 ### Example Configuration
 
-See `config_example.json` for a full pipeline with epochs:
+See `config_example.yaml` for a full pipeline with epochs:
 
-```json
-{
-  "pipeline": [
-    {"name": "load_data"},
-    {"name": "filter", "l_freq": 0.5, "h_freq": 40.0},
-    {"name": "reference", "type": "average"},
-    {"name": "ica", "n_components": 20, "find_eog": true, "apply": true},
-    {"name": "find_events"},
-    {"name": "epoch", "tmin": -0.2, "tmax": 0.8, "baseline": [null, 0]},
-    {"name": "save_clean_epochs"},
-    {"name": "generate_report", "generate_html": true}
-  ]
-}
+```yaml
+pipeline:
+  - name: load_data
+  - name: filter
+    l_freq: 0.5
+    h_freq: 40.0
+  - name: reference
+    type: average
+  - name: ica
+    n_components: 20
+    find_eog: true
+    apply: true
+  - name: find_events
+  - name: epoch
+    tmin: -0.2
+    tmax: 0.8
+    baseline: [null, 0]
+  - name: save_clean_epochs
+  - name: generate_report
+    generate_html: true
 ```
 
-See `config_raw_only.json` for a simpler pipeline without epoching:
+See `config_raw_only.yaml` for a simpler pipeline without epoching:
 
-```json
-{
-  "pipeline": [
-    {"name": "load_data"},
-    {"name": "filter", "l_freq": 1.0, "h_freq": 30.0},
-    {"name": "reference", "type": "average"},
-    {"name": "ica", "n_components": 15, "find_eog": true, "apply": true},
-    {"name": "save_clean_raw"},
-    {"name": "generate_report"}
-  ]
-}
+```yaml
+pipeline:
+  - name: load_data
+  - name: filter
+    l_freq: 1.0
+    h_freq: 30.0
+  - name: reference
+    type: average
+  - name: ica
+    n_components: 15
+    find_eog: true
+    apply: true
+  - name: save_clean_raw
+  - name: generate_report
 ```
 
-See `config_with_adaptive_reject.json` for a pipeline with adaptive autoreject steps:
+See `config_with_adaptive_reject.yaml` for a pipeline with adaptive autoreject steps:
 
-```json
-{
-  "pipeline": [
-    {"name": "load_data"},
-    {"name": "filter", "l_freq": 0.5, "h_freq": 40.0},
-    {"name": "reference", "type": "average"},
-    {"name": "ica", "n_components": 20, "find_eog": true, "apply": true},
-    {"name": "find_events"},
-    {"name": "epoch", "tmin": -0.2, "tmax": 0.8, "baseline": [null, 0]},
-    {"name": "find_bads_channels_threshold", "reject": {"eeg": 1.5e-04}, "n_epochs_bad_ch": 0.5},
-    {"name": "find_bads_channels_variance", "zscore_thresh": 4},
-    {"name": "find_bads_channels_high_frequency", "zscore_thresh": 4},
-    {"name": "find_bads_epochs_threshold", "reject": {"eeg": 1.5e-04}, "n_channels_bad_epoch": 0.1},
-    {"name": "save_clean_epochs"},
-    {"name": "generate_report"}
-  ]
-}
+```yaml
+pipeline:
+  - name: load_data
+  - name: filter
+    l_freq: 0.5
+    h_freq: 40.0
+  - name: reference
+    type: average
+  - name: ica
+    n_components: 20
+    find_eog: true
+    apply: true
+  - name: find_events
+  - name: epoch
+    tmin: -0.2
+    tmax: 0.8
+    baseline: [null, 0]
+  - name: find_bads_channels_threshold
+    reject:
+      eeg: 1.5e-04
+    n_epochs_bad_ch: 0.5
+  - name: find_bads_channels_variance
+    zscore_thresh: 4
+  - name: find_bads_channels_high_frequency
+    zscore_thresh: 4
+  - name: find_bads_epochs_threshold
+    reject:
+      eeg: 1.5e-04
+    n_channels_bad_epoch: 0.1
+  - name: save_clean_epochs
+  - name: generate_report
 ```
 
 ## Command-Line Arguments
@@ -192,7 +216,7 @@ See `config_with_adaptive_reject.json` for a pipeline with adaptive autoreject s
 - `--subjects`: Subject ID(s) to process, space or comma-separated (required)
 - `--task`: Task name (optional)
 - `--output-root`: Custom output path (optional, defaults to `bids-root/derivatives/nice-preprocessing`)
-- `--config`: Path to JSON configuration file (optional)
+- `--config`: Path to YAML configuration file (optional)
 
 ## Preprocessing Steps Details
 
@@ -277,7 +301,7 @@ python eeg_preprocessing_pipeline.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 03 04 05 \
     --task rest \
-    --config config_example.json
+    --config config_example.yaml
 ```
 
 For HPC/cluster environments, you can create your own SLURM or other batch submission scripts that call the pipeline with subject lists.

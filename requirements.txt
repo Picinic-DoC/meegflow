@@ -3,6 +3,7 @@ mne>=1.5.0
 mne-bids>=0.14
 numpy>=1.24.0
 scipy>=1.11.0
+PyYAML>=6.0
 
 # Optional but recommended
 matplotlib>=3.7.0

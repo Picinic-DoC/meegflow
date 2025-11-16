@@ -223,12 +223,13 @@ def example_reading_json_report():
     print("Example 8: Reading JSON Report")
     print("-" * 50)
     
-    import json
+    import yaml
     
-    # Path to JSON report
+    # Path to JSON report (output is still JSON)
     json_path = '/path/to/derivatives/json_reports/sub-01_task-rest_report.json'
     
-    # Load JSON report
+    # Load JSON report (output is still JSON, config is YAML)
+    import json
     with open(json_path, 'r') as f:
         report = json.load(f)
     
