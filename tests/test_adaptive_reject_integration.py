@@ -8,6 +8,7 @@ These are structural tests that verify the integration without requiring MNE.
 import sys
 import ast
 import json
+import yaml
 from pathlib import Path
 
 
@@ -83,30 +84,32 @@ def test_step_methods_call_adaptive_reject():
 
 def test_config_with_adaptive_reject_exists():
     """Test that example config with adaptive reject exists."""
-    config_file = Path("configs/config_with_adaptive_reject.json")
+    config_file = Path("configs/config_with_adaptive_reject.yaml")
     assert config_file.exists(), "Config file with adaptive reject does not exist"
-    print("✓ Config file 'config_with_adaptive_reject.json' exists")
+    print("✓ Config file 'config_with_adaptive_reject.yaml' exists")
 
 
 def test_config_with_adaptive_reject_valid():
-    """Test that the config with adaptive reject is valid JSON."""
-    config_file = Path("configs/config_with_adaptive_reject.json")
+    """Test that the config with adaptive reject is valid YAML."""
+    config_file = Path("configs/config_with_adaptive_reject.yaml")
     
+    import yaml
     with open(config_file, 'r') as f:
-        config = json.load(f)
+        config = yaml.safe_load(f)
     
     assert "pipeline" in config, "Config must have 'pipeline' key"
     assert isinstance(config["pipeline"], list), "Pipeline must be a list"
     
-    print("✓ Config file is valid JSON with pipeline structure")
+    print("✓ Config file is valid YAML with pipeline structure")
 
 
 def test_config_includes_adaptive_reject_steps():
     """Test that the config includes all adaptive reject steps."""
-    config_file = Path("configs/config_with_adaptive_reject.json")
+    config_file = Path("configs/config_with_adaptive_reject.yaml")
     
+    import yaml
     with open(config_file, 'r') as f:
-        config = json.load(f)
+        config = yaml.safe_load(f)
     
     step_names = [step['name'] for step in config['pipeline']]
     
@@ -149,9 +152,9 @@ def test_readme_has_config_example():
     with open(readme_file, 'r') as f:
         readme = f.read()
     
-    assert "config_with_adaptive_reject.json" in readme, \
-        "README does not reference config_with_adaptive_reject.json"
-    print("✓ README references 'config_with_adaptive_reject.json'")
+    assert "config_with_adaptive_reject.yaml" in readme, \
+        "README does not reference config_with_adaptive_reject.yaml"
+    print("✓ README references 'config_with_adaptive_reject.yaml'")
 
 
 def run_all_tests():
