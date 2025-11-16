@@ -59,6 +59,12 @@ class EEGPreprocessingPipeline:
     
         return pipeline_steps
 
+    def _get_picks(self, info: mne.Info, picks_params: Any) -> List[int]:
+        # Compute picks if provided
+        if isinstance(picks_params, (list, tuple)):
+            return  mne.pick_types(info, *picks_params)
+        return None
+
     # Auxiliary functions for each preprocessing step
 
     def _step_load_data(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -80,16 +86,7 @@ class EEGPreprocessingPipeline:
         n_jobs = step_config.get('n_jobs', 1)
 
         # Compute picks if provided, otherwise None (all channels)
-        picks = None
-        if picks_params is not None:
-            try:
-                if isinstance(picks_params, (list, tuple)):
-                    picks = mne.pick_types(data['raw'].info, *picks_params)
-                else:
-                    # allow string like 'eeg'
-                    picks = mne.pick_types(data['raw'].info, eeg=('eeg' in str(picks_params).lower()))
-            except Exception:
-                picks = None
+        picks = self._get_picks(data['raw'].info, picks_params)
 
         # Apply filtering in 2 steps: high-pass and low-pass
         high_pass_filter_params = dict(
@@ -146,15 +143,7 @@ class EEGPreprocessingPipeline:
         n_jobs = step_config.get('n_jobs', 1)
 
         # Compute picks if provided
-        picks = None
-        if picks_params is not None:
-            try:
-                if isinstance(picks_params, (list, tuple)):
-                    picks = mne.pick_types(data['raw'].info, *picks_params)
-                else:
-                    picks = None
-            except Exception:
-                picks = None
+        picks = self._get_picks(data['raw'].info, picks_params)
 
         data['raw'].notch_filter(
             freqs=freqs,
@@ -314,9 +303,11 @@ class EEGPreprocessingPipeline:
         if 'epochs' not in data:
             raise ValueError("find_bads_channels_threshold requires 'epochs' in data")
 
-        picks = step_config.get('picks', mne.pick_types(data['epochs'].info, eeg=True, eog=False, meg=False))
+        picks_params = step_config.get('picks', None)
         reject = step_config.get('reject', {'eeg': 150e-6})
         n_epochs_bad_ch = step_config.get('n_epochs_bad_ch', 0.5)
+
+        picks = self._get_picks(data['raw'].info, picks_params)
 
         bad_chs = adaptive_reject.find_bads_channels_threshold(
             data['epochs'], picks, reject, n_epochs_bad_ch
@@ -343,10 +334,12 @@ class EEGPreprocessingPipeline:
         if instance_name not in data:
             raise ValueError(f"find_bads_channels_variance requires '{instance_name}' in data")
 
+        picks_params = step_config.get('picks', None)
         inst = data[instance_name]
-        picks = step_config.get('picks', mne.pick_types(inst.info, eeg=True, eog=False, meg=False))
         zscore_thresh = step_config.get('zscore_thresh', 4)
         max_iter = step_config.get('max_iter', 2)
+
+        picks = self._get_picks(data['raw'].info, picks_params)
 
         bad_chs = adaptive_reject.find_bads_channels_variance(
             inst, picks, zscore_thresh, max_iter
@@ -374,10 +367,12 @@ class EEGPreprocessingPipeline:
         if instance_name not in data:
             raise ValueError(f"find_bads_channels_high_frequency requires '{instance_name}' in data")
 
+        picks_params = step_config.get('picks', None)
         inst = data[instance_name]
-        picks = step_config.get('picks', mne.pick_types(inst.info, eeg=True, eog=False, meg=False))
         zscore_thresh = step_config.get('zscore_thresh', 4)
         max_iter = step_config.get('max_iter', 2)
+
+        picks = self._get_picks(data['raw'].info, picks_params)
 
         bad_chs = adaptive_reject.find_bads_channels_high_frequency(
             inst, picks, zscore_thresh, max_iter
@@ -403,9 +398,11 @@ class EEGPreprocessingPipeline:
         if 'epochs' not in data:
             raise ValueError("find_bads_epochs_threshold requires 'epochs' in data")
 
-        picks = step_config.get('picks', mne.pick_types(data['epochs'].info, eeg=True, eog=False, meg=False))
+        picks_params = step_config.get('picks', None)
         reject = step_config.get('reject', {'eeg': 150e-6})
         n_channels_bad_epoch = step_config.get('n_channels_bad_epoch', 0.1)
+
+        picks = self._get_picks(data['raw'].info, picks_params)
 
         bad_epochs = adaptive_reject.find_bads_epochs_threshold(
             data['epochs'], picks, reject, n_channels_bad_epoch
