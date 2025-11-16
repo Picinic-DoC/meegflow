@@ -7,8 +7,9 @@ The pipeline is configuration-driven - you specify steps, their order, and param
 """
 from pathlib import Path
 from typing import Iterable, Union, Dict, Any, List
+import json
 import mne
-from mne_bids import BIDSPath, read_raw_bids
+from mne_bids import BIDSPath, read_raw_bids, find_matching_paths
 import adaptive_reject
 
 
@@ -626,34 +627,76 @@ class EEGPreprocessingPipeline:
 
         return results
 
-    def run_pipeline(self, subjects: Iterable[str], task: str = None) -> Dict[str, Any]:
-        """Run the pipeline for a single subject or an iterable of subjects sequentially.
+    def run_pipeline(
+        self, 
+        subjects: Union[str, List[str]] = None,
+        sessions: Union[str, List[str]] = None,
+        tasks: Union[str, List[str]] = None,
+        acquisitions: Union[str, List[str]] = None,
+        runs: Union[str, List[str]] = None,
+        processings: Union[str, List[str]] = None,
+        recordings: Union[str, List[str]] = None,
+        spaces: Union[str, List[str]] = None,
+        splits: Union[str, List[str]] = None,
+        descriptions: Union[str, List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Run the pipeline using mne-bids find_matching_paths to query files.
 
         Parameters
-        - subjects: an iterable of subject ids.
-        - task: optional BIDS task label used when reading data.
+        ----------
+        subjects : str | list of str | None
+            Subject ID(s) to process. None matches all subjects.
+        sessions : str | list of str | None
+            Session ID(s) to process. None matches all sessions.
+        tasks : str | list of str | None
+            Task(s) to process. None matches all tasks.
+        acquisitions : str | list of str | None
+            Acquisition parameter(s). None matches all acquisitions.
+        runs : str | list of str | None
+            Run number(s). None matches all runs.
+        processings : str | list of str | None
+            Processing label(s). None matches all processings.
+        recordings : str | list of str | None
+            Recording name(s). None matches all recordings.
+        spaces : str | list of str | None
+            Coordinate space(s). None matches all spaces.
+        splits : str | list of str | None
+            Split(s) of continuous recording. None matches all splits.
+        descriptions : str | list of str | None
+            Description(s). None matches all descriptions.
 
-        Returns a dictionary mapping subject -> results dict.
+        Returns
+        -------
+        all_results : dict
+            Dictionary mapping subject -> list of results for each matching file.
         """
+        # Use find_matching_paths to get all matching files
+        matching_paths = find_matching_paths(
+            root=self.bids_root,
+            subjects=subjects,
+            sessions=sessions,
+            tasks=tasks,
+            acquisitions=acquisitions,
+            runs=runs,
+            processings=processings,
+            recordings=recordings,
+            spaces=spaces,
+            splits=splits,
+            descriptions=descriptions,
+            suffixes='eeg',
+            datatypes='eeg',
+        )
 
         all_results = {}
-        for subject in subjects:
-
-            base_path = BIDSPath(
-                root=self.bids_root,
-                subject=subject,
-                task=task,
-                datatype='eeg',
-                suffix='eeg',
-            )
-
-            # Iterate over matching files/recordings (BIDSPath.match returns paths)
-            for raw_path in base_path.match():
-                try:
-                    results = self._process_single_recording(raw_path)
-                    all_results.setdefault(subject, []).append(results)
-                except Exception as exc:
-                    # Do not stop the whole batch if one subject fails; capture the error
-                    all_results.setdefault(subject, []).append({'error': str(exc)})
+        
+        # Process each matching path
+        for raw_path in matching_paths:
+            subject = raw_path.subject
+            try:
+                results = self._process_single_recording(raw_path)
+                all_results.setdefault(subject, []).append(results)
+            except Exception as exc:
+                # Do not stop the whole batch if one subject fails; capture the error
+                all_results.setdefault(subject, []).append({'error': str(exc)})
 
         return all_results
