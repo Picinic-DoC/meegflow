@@ -1,0 +1,55 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run structure tests
+      run: |
+        echo "Running pipeline structure tests..."
+        python tests/test_pipeline_structure.py
+    
+    - name: Run CLI separation tests
+      run: |
+        echo "Running CLI separation tests..."
+        python tests/test_cli_separation.py
+    
+    - name: Run adaptive reject integration tests
+      run: |
+        echo "Running adaptive reject integration tests..."
+        python tests/test_adaptive_reject_integration.py
+    
+    - name: Run adaptive reject functional tests
+      run: |
+        echo "Running adaptive reject functional tests..."
+        python tests/test_adaptive_reject_functional.py
+    
+    - name: Test summary
+      if: always()
+      run: |
+        echo "Test execution completed"
