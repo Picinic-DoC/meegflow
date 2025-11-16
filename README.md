@@ -38,17 +38,25 @@ Run the preprocessing pipeline on multiple subjects:
 python eeg_preprocessing_pipeline.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 03 \
-    --task rest \
+    --tasks rest \
     --config config_example.yaml
 ```
 
-Or with comma-separated subjects:
+Process all subjects with a specific task:
 
 ```bash
 python eeg_preprocessing_pipeline.py \
     --bids-root /path/to/bids/dataset \
-    --subjects "01,02,03" \
-    --task rest
+    --tasks rest
+```
+
+Process specific subjects with multiple tasks:
+
+```bash
+python eeg_preprocessing_pipeline.py \
+    --bids-root /path/to/bids/dataset \
+    --subjects 01 02 \
+    --tasks rest task1 task2
 ```
 
 ### Python API Usage
@@ -73,7 +81,7 @@ pipeline = EEGPreprocessingPipeline(
 # Run preprocessing on multiple subjects
 results = pipeline.run_pipeline(
     subjects=['01', '02', '03'],
-    task='rest'
+    tasks='rest'
 )
 
 # Access results for each subject
@@ -212,9 +220,24 @@ pipeline:
 
 ## Command-Line Arguments
 
-- `--bids-root`: Path to BIDS root directory (required)
-- `--subjects`: Subject ID(s) to process, space or comma-separated (required)
-- `--task`: Task name (optional)
+### Required Arguments
+- `--bids-root`: Path to BIDS root directory
+
+### Optional Filter Arguments
+These arguments use the same matching logic as `mne-bids` `find_matching_paths`. If not specified, all matching files will be processed.
+
+- `--subjects`: Subject ID(s) to process, space-separated (e.g., `--subjects 01 02 03`)
+- `--sessions`: Session ID(s) to process, space-separated
+- `--tasks`: Task name(s) to process, space-separated (e.g., `--tasks rest task1`)
+- `--acquisitions`: Acquisition parameter(s) to process
+- `--runs`: Run number(s) to process
+- `--processings`: Processing label(s) to process
+- `--recordings`: Recording name(s) to process
+- `--spaces`: Coordinate space(s) to process
+- `--splits`: Split(s) of continuous recording to process
+- `--descriptions`: Description(s) to process
+
+### Other Arguments
 - `--output-root`: Custom output path (optional, defaults to `bids-root/derivatives/nice-preprocessing`)
 - `--config`: Path to YAML configuration file (optional)
 
@@ -293,15 +316,27 @@ Generate JSON and optionally HTML reports.
 
 ## Batch Processing
 
-The pipeline now processes multiple subjects sequentially. Simply pass multiple subject IDs:
+The pipeline processes multiple subjects and files sequentially. You can process:
 
 ```bash
-# Process multiple subjects at once
+# Process specific subjects with a specific task
 python eeg_preprocessing_pipeline.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 03 04 05 \
-    --task rest \
+    --tasks rest \
     --config config_example.yaml
+
+# Process all subjects in the dataset
+python eeg_preprocessing_pipeline.py \
+    --bids-root /path/to/bids/dataset \
+    --config config_example.yaml
+
+# Process specific sessions for specific subjects
+python eeg_preprocessing_pipeline.py \
+    --bids-root /path/to/bids/dataset \
+    --subjects 01 02 \
+    --sessions 01 02 \
+    --tasks rest
 ```
 
 For HPC/cluster environments, you can create your own SLURM or other batch submission scripts that call the pipeline with subject lists.
