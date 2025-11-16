@@ -1,10 +1,10 @@
 pipeline:
   - name: load_data
-  - name: filter
+  - name: bandpass_filter
     l_freq: 0.5
     h_freq: 40.0
   - name: reference
-    type: average
+    ref_channels: average
     projection: false
   - name: ica
     n_components: 20
@@ -22,5 +22,5 @@ pipeline:
     reject:
       eeg: 1.5e-04
   - name: save_clean_epochs
-  - name: generate_report
-    generate_html: true
+  - name: generate_json_report
+  - name: generate_html_report
