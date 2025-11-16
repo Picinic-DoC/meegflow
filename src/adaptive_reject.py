@@ -7,9 +7,54 @@ import math
 import numpy as np
 
 from scipy.signal import butter, filtfilt
+from scipy.stats import zscore
 
 import mne
 from mne.utils import logger
+
+
+def _find_outliers(X, threshold=3.0, max_iter=2, tail=0):
+    """Find outliers based on iterated Z-scoring.
+
+    This procedure compares the absolute z-score against the threshold.
+    After excluding local outliers, the comparison is repeated until no
+    local outlier is present any more.
+
+    Parameters
+    ----------
+    X : np.ndarray of float, shape (n_elements,)
+        The scores for which to find outliers.
+    threshold : float
+        The value above which a feature is classified as outlier.
+    max_iter : int
+        The maximum number of iterations.
+    tail : {0, 1, -1}
+        Whether to search for outliers on both extremes of the z-scores (0),
+        or on just the positive (1) or negative (-1) side.
+
+    Returns
+    -------
+    bad_idx : np.ndarray of int, shape (n_features)
+        The outlier indices.
+    """
+    my_mask = np.zeros(len(X), dtype=bool)
+    for _ in range(max_iter):
+        X = np.ma.masked_array(X, my_mask)
+        if tail == 0:
+            this_z = np.abs(zscore(X))
+        elif tail == 1:
+            this_z = zscore(X)
+        elif tail == -1:
+            this_z = -zscore(X)
+        else:
+            raise ValueError(f"Tail parameter {tail} not recognised.")
+        local_bad = this_z > threshold
+        my_mask = np.max([my_mask, local_bad], 0)
+        if not np.any(local_bad):
+            break
+
+    bad_idx = np.where(my_mask)[0]
+    return bad_idx
 
 
 def find_bads_channels_threshold(epochs, picks, reject, n_epochs_bad_ch=0.5):
@@ -18,15 +63,15 @@ def find_bads_channels_threshold(epochs, picks, reject, n_epochs_bad_ch=0.5):
     data = epochs.get_data()
     n_epochs = data.shape[0]
 
-    if isinstance(n_epochs_bad_ch, (np.float, float)):
+    if isinstance(n_epochs_bad_ch, float):
         n_epochs_bad_ch = math.floor(n_epochs_bad_ch * n_epochs)
 
-    ch_types_inds = mne.io.pick.channel_indices_by_type(epochs.info)
+    ch_types_inds = mne.channel_indices_by_type(epochs.info)
     data = np.transpose(data, (1, 0, 2))
-    bad_ch_idx = np.ndarray((0,), dtype=np.int)
+    bad_ch_idx = np.ndarray((0,), dtype=int)
     for key, reject_thresh in reject.items():
         idx = np.array([x for x in ch_types_inds[key] if x in picks])
-        count_bad_epochs = np.zeros((n_channels), dtype=np.int)
+        count_bad_epochs = np.zeros((n_channels), dtype=int)
         for i_ch, channel in enumerate(data[idx]):
             deltas = channel.max(axis=1) - channel.min(axis=1)
             idx_deltas = np.where(np.greater(deltas, reject_thresh))[0]
@@ -46,13 +91,13 @@ def find_bads_channels_variance(inst, picks, zscore_thresh=4, max_iter=2):
     if isinstance(inst, mne.Epochs):
         data = inst.get_data()
     else:
-        data = inst._data[None, :]
-    masked_data = np.ma.masked_array(data, fill_value=np.NaN)
+        data = inst.get_data()[None, :]
+    masked_data = np.ma.masked_array(data, fill_value=np.nan)
     exclude = np.array([x for x in range(data.shape[1]) if x not in picks])
     if len(exclude) > 0:
         masked_data[:, exclude, :] = np.ma.masked
     ch_var = np.ma.hstack(masked_data).var(axis=-1)
-    bad_ch_var = mne.preprocessing.bads._find_outliers(
+    bad_ch_var = _find_outliers(
         ch_var, threshold=zscore_thresh, max_iter=max_iter)
     logger.info('Reject by variance: bad_channels: %s' % bad_ch_var)
     bad_chs = list({inst.ch_names[i] for i in bad_ch_var})
@@ -64,18 +109,18 @@ def find_bads_channels_high_frequency(inst, picks, zscore_thresh=4, max_iter=2):
     if isinstance(inst, mne.Epochs):
         data = inst.get_data()
     else:
-        data = inst._data[None, :]
-    masked_data = np.ma.masked_array(data, fill_value=np.NaN)
+        data = inst.get_data()[None, :]
+    masked_data = np.ma.masked_array(data, fill_value=np.nan)
     exclude = np.array([x for x in range(data.shape[1]) if x not in picks])
     if len(exclude) > 0:
         masked_data[:, exclude, :] = np.ma.masked
     filter_freq = 25
     b, a = butter(4, 2.0 * filter_freq / inst.info['sfreq'], 'highpass')
     filt_data = filtfilt(b, a, np.ma.hstack(masked_data))
-    filt_masked_data = np.ma.masked_array(filt_data, fill_value=np.NaN)
+    filt_masked_data = np.ma.masked_array(filt_data, fill_value=np.nan)
     if len(exclude) > 0:
         filt_masked_data[exclude, :] = np.ma.masked
-    bad_ch_hf = mne.preprocessing.bads._find_outliers(
+    bad_ch_hf = _find_outliers(
         filt_masked_data.std(axis=-1), threshold=zscore_thresh,
         max_iter=max_iter)
     logger.info('Reject by high frequency std: bad_channels: %s' % bad_ch_hf)
@@ -85,20 +130,20 @@ def find_bads_channels_high_frequency(inst, picks, zscore_thresh=4, max_iter=2):
 
 def find_bads_epochs_threshold(epochs, picks, reject, n_channels_bad_epoch=0.1):
     n_channels = len(picks)
-    bad_ep_idx = np.ndarray((0,), dtype=np.int)
-    if isinstance(n_channels_bad_epoch, (np.float, float)):
+    bad_ep_idx = np.ndarray((0,), dtype=int)
+    if isinstance(n_channels_bad_epoch, float):
         n_channels_bad_epoch = math.floor(n_channels_bad_epoch * n_channels)
 
     data = epochs.get_data()
-    masked_data = np.ma.masked_array(data, fill_value=np.NaN)
+    masked_data = np.ma.masked_array(data, fill_value=np.nan)
     exclude = np.array([x for x in range(data.shape[1]) if x not in picks])
     if len(exclude) > 0:
         masked_data[:, exclude, :] = np.ma.masked
-    ch_types_inds = mne.io.pick.channel_indices_by_type(epochs.info)
+    ch_types_inds = mne.channel_indices_by_type(epochs.info)
     n_epochs = masked_data.shape[0]
     for key, reject_thresh in reject.items():
         idx = np.array([x for x in ch_types_inds[key] if x in picks])
-        count_bad_chans = np.zeros((n_epochs), dtype=np.int)
+        count_bad_chans = np.zeros((n_epochs), dtype=int)
         for i_ep, epoch in enumerate(masked_data[:, idx]):
             deltas = epoch.max(axis=1) - epoch.min(axis=1)
             idx_deltas = np.where(np.greater(deltas, reject_thresh))[0]
