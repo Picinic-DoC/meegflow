@@ -16,72 +16,163 @@ from mne_bids import BIDSPath, read_raw_bids
 class EEGPreprocessingPipeline:
     def __init__(self, bids_root: Union[str, Path], output_root: Union[str, Path] = None, config: Dict[str, Any] = None):
         self.bids_root = Path(bids_root)
-        self.output_root = Path(output_root) if output_root is not None else self.bids_root / 'derivatives' / 'nice-preprocessing'
-        self.output_root.mkdir(parents=True, exist_ok=True)
         self.config = config or {}
         
         # Map step names to their corresponding methods
         self.step_functions = {
             'load_data': self._step_load_data,
-            'filter': self._step_filter,
+            'bandpass_filter': self._step_bandpass_filter,
+            'notch_filter': self._step_notch_filter,
             'reference': self._step_reference,
             'ica': self._step_ica,
             'find_events': self._step_find_events,
             'epoch': self._step_epoch,
             'save_clean_epochs': self._step_save_clean_epochs,
-            'save_clean_raw': self._step_save_clean_raw,
-            'generate_report': self._step_generate_report,
+            'generate_json_report': self._step_generate_json_report,
+            'generate_html_report': self._step_generate_html_report,
         }
     
     # Auxiliary functions for each preprocessing step
-    
+
     def _step_load_data(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Load raw data into memory."""
         if 'raw' in data:
             data['raw'].load_data()
         return data
     
-    def _step_filter(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+    def _step_bandpass_filter(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Apply bandpass filtering."""
         if 'raw' not in data:
             return data
-        
+
+        picks_params = step_config.get('picks', None)
         l_freq = step_config.get('l_freq', 0.5)
-        h_freq = step_config.get('h_freq', 40.0)
-        data['raw'].filter(l_freq, h_freq)
-        
+        l_freq_order = step_config.get('l_freq_order', 6)
+        h_freq = step_config.get('h_freq', 45.0)
+        h_freq_order = step_config.get('h_freq_order', 8)
+        n_jobs = step_config.get('n_jobs', 1)
+
+        # Get picks if specified
+        if picks_params is not None:
+            picks = mne.pick_types(data['raw'].info, *picks_params)
+
+        # Apply filtering in 2 steps: high-pass and low-pass
+        high_pass_filter_params = dict(
+            method='iir',
+            l_trans_bandwidth=0.1,
+            iir_params=dict(ftype='butter', order=l_freq_order),
+            l_freq=l_freq,
+            h_freq=None,
+            n_jobs=n_jobs
+        )
+        data['raw'].filter(
+            picks=picks,
+            **high_pass_filter_params
+        )
+
+        low_pass_filter_params = dict(
+            method='iir',
+            h_trans_bandwidth=0.1,
+            iir_params=dict(ftype='butter', order=h_freq_order),
+            l_freq=None,
+            h_freq=h_freq,
+            n_jobs=n_jobs
+        )
+        data['raw'].filter(
+            picks=picks,
+            **low_pass_filter_params
+        )
+
         # Store info for reporting
         if 'preprocessing_steps' not in data:
             data['preprocessing_steps'] = []
-        data['preprocessing_steps'].append({
-            'step': 'filter',
-            'l_freq': l_freq,
-            'h_freq': h_freq
-        })
-        
+
+        data['preprocessing_steps'].extend([
+            {
+                'step': 'high_pass_filter',
+                'picks': picks_params,
+                **high_pass_filter_params
+            },
+            {
+                'step': 'low_pass_filter',
+                'picks': picks_params,
+                **low_pass_filter_params
+            }
+        ])
+
+
         return data
-    
-    def _step_reference(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply re-referencing."""
+
+    def _step_notch_filter(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply notch filtering."""
         if 'raw' not in data:
+            # TODO: raise exception instead of silent return
             return data
-        
-        ref_type = step_config.get('type', 'average')
-        projection = step_config.get('projection', False)
-        
-        if ref_type == 'average':
-            data['raw'].set_eeg_reference('average', projection=projection)
-        
+
+        picks_params = step_config.get('picks', None)
+        freqs = step_config.get('freqs', [50.0, 100.0])
+        notch_widths = step_config.get('notch_widths', None)
+        method = step_config.get('method', 'fft')
+        n_jobs = step_config.get('n_jobs', 1)
+
+        # Get picks if specified
+        if picks_params is not None:
+            picks = mne.pick_types(data['raw'].info, *picks_params)
+
+        data['raw'].notch_filter(
+            freqs=freqs,
+            method=method,
+            notch_widths=notch_widths,
+            picks=picks,
+            n_jobs=n_jobs
+        )
+
+        # Store info for reporting
         if 'preprocessing_steps' not in data:
             data['preprocessing_steps'] = []
+
+        data['preprocessing_steps'].append({
+            'step': 'notch_filter',
+            'picks': picks_params,
+            'freqs': freqs,
+            'method': method,
+            'notch_widths': notch_widths
+        })
+
+        return data
+
+    def _step_reference(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply re-referencing."""
+
+        ref_type = step_config.get('type', 'average')
+        instance = step_config.get('instance', 'epochs')
+        projection = step_config.get('projection', True)
+        apply = step_config.get('apply', True)
+
+        if instance not in data:
+            # TODO: raise exception instead of silent return
+            return data
+
+        mne.set_eeg_reference(
+            inst=data[instance],
+            ref_channels=ref_type,
+            projection=projection,
+            apply=apply,
+        )
+
+        if 'preprocessing_steps' not in data:
+            data['preprocessing_steps'] = []
+
         data['preprocessing_steps'].append({
             'step': 'reference',
             'type': ref_type,
-            'projection': projection
+            'projection': projection,
+            'apply': apply
         })
         
         return data
     
+    # TODO: Review ICA
     def _step_ica(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Apply ICA for artifact removal."""
         if 'raw' not in data:
@@ -141,39 +232,33 @@ class EEGPreprocessingPipeline:
     def _step_find_events(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Find events in the data."""
         if 'raw' not in data:
+            # TODO: raise exception instead of silent return
             return data
         
         shortest_event = step_config.get('shortest_event', 1)
-        try:
-            events = mne.find_events(data['raw'], shortest_event=shortest_event)
-            data['events'] = events
-            
-            if 'preprocessing_steps' not in data:
-                data['preprocessing_steps'] = []
-            data['preprocessing_steps'].append({
-                'step': 'find_events',
-                'n_events': len(events)
-            })
-        except:
-            data['events'] = None
+        events = mne.find_events(data['raw'], shortest_event=shortest_event)
+        data['events'] = events
+
+        data['preprocessing_steps'].append({
+            'step': 'find_events',
+            'n_events': len(events)
+        })
         
         return data
     
     def _step_epoch(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Create epochs from raw data."""
-        if 'raw' not in data or 'events' not in data:
-            return data
-        
-        if data['events'] is None or len(data['events']) == 0:
+        if data.get('raw', None) is None or data.get('events', None) is None:
+            # TODO: raise exception instead of silent return
             return data
         
         event_id = step_config.get('event_id', None)
         tmin = step_config.get('tmin', -0.2)
         tmax = step_config.get('tmax', 0.5)
-        baseline = step_config.get('baseline', None)
+        baseline = step_config.get('baseline', (None, 0.0))
         reject = step_config.get('reject', None)
         
-        epochs = mne.Epochs(
+        data['epochs'] = mne.Epochs(
             data['raw'],
             events=data['events'],
             event_id=event_id,
@@ -183,120 +268,159 @@ class EEGPreprocessingPipeline:
             reject=reject,
             preload=True
         )
-        
-        data['epochs'] = epochs
-        
-        if 'preprocessing_steps' not in data:
-            data['preprocessing_steps'] = []
+
         data['preprocessing_steps'].append({
             'step': 'epoch',
+            'event_id': event_id,
             'tmin': tmin,
             'tmax': tmax,
-            'n_epochs': len(epochs)
+            'baseline': baseline,
+            'reject': reject,
+            'n_epochs': len(data['epochs'])
         })
-        
+
         return data
-    
+
     def _step_save_clean_epochs(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Save clean epochs to .fif file."""
-        if 'epochs' not in data or data['epochs'] is None:
+        """Save clean epochs to a BIDS-derivatives-compatible path."""
+
+        if 'epochs' not in data:
+            # TODO: raise exception instead of silent return
             return data
-        
-        subject = data.get('subject', 'unknown')
-        task = data.get('task', 'unknown')
-        
-        subject_out = self.output_root / f'sub-{subject}' / 'clean_epochs'
-        subject_out.mkdir(parents=True, exist_ok=True)
-        
-        epochs_file = subject_out / f'sub-{subject}_task-{task}_clean-epo.fif'
-        data['epochs'].save(str(epochs_file), overwrite=True)
-        
-        data['epochs_file'] = str(epochs_file)
+
+        overwrite = step_config.get('overwrite', True)
+
+        # Derivatives root for this pipeline
+        deriv_root = self.bids_root / "derivatives" / "nice_preprocessing" / "epochs"
+
+        bids_path = BIDSPath(
+            subject=data['subject'],
+            task=data['task'],
+            session=data.get('session', None),
+            acquisition=data.get('acquisition', None),
+            run=data.get('run', None),
+            datatype="eeg",
+            root=deriv_root,
+            suffix="epo",
+            extension=".fif",
+            processing="clean",
+            description="cleaned",
+            check=False,
+        )
+
+        # Create the directory structure (…/sub-XX[/ses-YY]/eeg)
+        bids_path.mkdir(exist_ok=True)
+
+        # Save epochs
+        data['epochs'].save(bids_path.fpath, overwrite=overwrite)
+
+        # Store paths & metadata in the data dict
+        data['epochs_file'] = str(bids_path.fpath)
         data['n_epochs'] = len(data['epochs'])
-        
         return data
     
-    def _step_save_clean_raw(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Save clean raw data to .fif file."""
-        if 'raw' not in data:
-            return data
+    def _step_generate_json_report(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate JSON reports."""
         
-        subject = data.get('subject', 'unknown')
-        
-        subject_out = self.output_root / f'sub-{subject}' / 'clean_raw'
-        subject_out.mkdir(parents=True, exist_ok=True)
-        
-        raw_file = subject_out / f'sub-{subject}_raw_clean.fif'
-        data['raw'].save(str(raw_file), overwrite=True)
-        
-        data['raw_file'] = str(raw_file)
-        
-        return data
-    
-    def _step_generate_report(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate JSON and HTML reports."""
-        subject = data.get('subject', 'unknown')
-        
-        subject_out = self.output_root / f'sub-{subject}' / 'reports'
-        subject_out.mkdir(parents=True, exist_ok=True)
+        # Derivatives root for this pipeline
+        deriv_root = self.bids_root / "derivatives" / "nice_preprocessing" / "reports"
+
+        bids_path = BIDSPath(
+            subject=data['subject'],
+            task=data['task'],
+            session=data.get('session', None),
+            acquisition=data.get('acquisition', None),
+            run=data.get('run', None),
+            datatype="eeg",
+            root=deriv_root,
+            suffix="report",
+            extension=".json",
+            processing="clean",
+            description="cleaned",
+            check=False,
+        )
+
+        # Create the directory structure (…/sub-XX[/ses-YY]/eeg)
+        bids_path.mkdir(exist_ok=True)
         
         # JSON report
         report = {
-            'subject': subject,
-            'task': data.get('task', None),
+            'subject': data['subject'],
+            'task': data['task'],
+            'session': data.get('session', None),
+            'acquisition': data.get('acquisition', None),
+            'run': data.get('run', None),
             'preprocessing_steps': data.get('preprocessing_steps', []),
         }
         
         if 'raw' in data:
-            report['n_channels'] = data['raw'].info.get('nchan')
-            report['sfreq'] = data['raw'].info.get('sfreq')
-            report['n_times'] = data['raw'].n_times
-        
-        if 'epochs' in data and data['epochs'] is not None:
-            report['n_epochs'] = len(data['epochs'])
-        
-        json_file = subject_out / 'preprocessing_report.json'
-        with open(json_file, 'w') as f:
+            raport['raw'] = dict(
+                n_channels=data['raw'].info.get('nchan'),
+                sfreq=data['raw'].info.get('sfreq'),
+                n_times=data['raw'].n_times
+            )
+
+        with open(bids_path.fpath, 'w') as f:
             json.dump(report, f, indent=2)
         
-        data['json_report'] = str(json_file)
+        data['json_report'] = str(bids_path.fpath)
+
+    def _step_generate_html_report(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate HTML reports."""
         
-        # HTML report (optional, requires more dependencies)
-        if step_config.get('generate_html', False):
-            try:
-                html_report = mne.Report(title=f'Preprocessing Report - Subject {subject}')
-                
-                if 'raw' in data:
-                    html_report.add_raw(raw=data['raw'], title='Preprocessed Raw Data', psd=True)
-                
-                if 'ica' in data:
-                    html_report.add_ica(ica=data['ica'], title='ICA Components', inst=data['raw'])
-                
-                if 'epochs' in data and data['epochs'] is not None:
-                    html_report.add_epochs(epochs=data['epochs'], title='Clean Epochs')
-                    evoked = data['epochs'].average()
-                    html_report.add_evokeds(evokeds=evoked, titles='Average Evoked Response')
-                
-                html_file = subject_out / 'preprocessing_report.html'
-                html_report.save(str(html_file), overwrite=True, open_browser=False)
-                data['html_report'] = str(html_file)
-            except Exception as e:
-                print(f"Warning: Could not generate HTML report: {e}")
+        # Derivatives root for this pipeline
+        deriv_root = self.bids_root / "derivatives" / "nice_preprocessing" / "reports"
+
+        bids_path = BIDSPath(
+            subject=data['subject'],
+            task=data['task'],
+            session=data.get('session', None),
+            acquisition=data.get('acquisition', None),
+            run=data.get('run', None),
+            datatype="eeg",
+            root=deriv_root,
+            suffix="report",
+            extension=".html",
+            processing="clean",
+            description="cleaned",
+            check=False,
+        )
+
+        # Create the directory structure (…/sub-XX[/ses-YY]/eeg)
+        bids_path.mkdir(exist_ok=True)
+        
+        html_report = mne.Report(title=f'Preprocessing Report - Subject {data["subject"]}')
+
+        if 'ica' in data:
+            html_report.add_ica(ica=data['ica'], title='ICA Components', inst=data['raw'])
+        
+        if 'epochs' in data and data['epochs'] is not None:
+            html_report.add_epochs(epochs=data['epochs'], title='Clean Epochs')
+            evoked = data['epochs'].average()
+            html_report.add_evokeds(evokeds=evoked, titles='Average Evoked Response')
+        
+        html_file = subject_out / 'preprocessing_report.html'
+        html_report.save(str(html_file), overwrite=True, open_browser=False)
+
+        data['html_report'] = str(html_file)
         
         return data
 
-    def _process_single_subject(self, subject: str, task: str = None) -> Dict[str, Any]:
+    def _process_single_recording(self, bids_path: BIDSPath) -> Dict[str, Any]:
         """Process a single subject using the configured pipeline steps."""
         # Initialize data dictionary
         data = {
-            'subject': subject,
-            'task': task,
+            'subject': bids_path.subject,
+            'task': bids_path.task,
+            'session': bids_path.session,
+            'acquisition': bids_path.acquisition,
+            'run': bids_path.run,
+            'preprocessing_steps': []
         }
         
         # Read BIDS data
-        bids_path = BIDSPath(root=str(self.bids_root), subject=subject, task=task, datatype='eeg')
         data['raw'] = read_raw_bids(bids_path=bids_path)
-        
+
         # Get pipeline steps from config
         pipeline_steps = self.config.get('pipeline', [])
         
@@ -304,63 +428,71 @@ class EEGPreprocessingPipeline:
         if not pipeline_steps:
             pipeline_steps = [
                 {'name': 'load_data'},
-                {'name': 'filter', 'l_freq': 0.5, 'h_freq': 40.0},
+                {'name': 'filter', 'l_freq': 0.5, 'h_freq': 45.0},
                 {'name': 'reference', 'type': 'average'},
-                {'name': 'save_clean_raw'},
-                {'name': 'generate_report'},
+                {'name': 'save_clean_epochs'},
+                {'name': 'generate_json_report'},
+                {'name': 'generate_html_report'},
             ]
-        
+
         # Execute each step in order
         for step in pipeline_steps:
             step_name = step.get('name')
             if step_name not in self.step_functions:
+                # TODO: Raiase exception instead of continue with the pipeline. check pipeline steps during initialization
                 print(f"Warning: Unknown step '{step_name}', skipping.")
                 continue
             
             # Execute the step with its configuration
             step_config = {k: v for k, v in step.items() if k != 'name'}
             data = self.step_functions[step_name](data, step_config)
-        
+
         # Prepare results
         results = {
             'subject': subject,
             'task': task,
+            'session': session,
+            'acquisition': acquisition,
+            'run': run,
+            'raw_file': str(bids_path.fpath)
         }
-        
+
         # Copy relevant output information to results
-        for key in ['epochs_file', 'raw_file', 'json_report', 'html_report', 'n_epochs', 'preprocessing_steps']:
+        for key in ['raw_file', 'epochs_file', 'json_report', 'html_report', 'n_epochs', 'preprocessing_steps']:
             if key in data:
                 results[key] = data[key]
-        
+
         return results
 
-    def run_pipeline(self, subjects: Union[str, Iterable[str]], task: str = None) -> Dict[str, Any]:
+    def run_pipeline(self, subjects: Iterable[str], task: str = None) -> Dict[str, Any]:
         """Run the pipeline for a single subject or an iterable of subjects sequentially.
 
         Parameters
-        - subjects: a single subject id (string) or an iterable of subject ids.
+        - subjects: an iterable of subject ids.
         - task: optional BIDS task label used when reading data.
 
         Returns a dictionary mapping subject -> results dict.
         """
-        # Normalize subjects into a list
-        if isinstance(subjects, str):
-            # allow comma-separated string
-            if ',' in subjects:
-                subjects_list = [s.strip() for s in subjects.split(',') if s.strip()]
-            else:
-                subjects_list = [subjects]
-        else:
-            subjects_list = list(subjects)
 
         all_results = {}
-        for subj in subjects_list:
-            try:
-                results = self._process_single_subject(subj, task=task)
-                all_results[subj] = results
-            except Exception as exc:
-                # Do not stop the whole batch if one subject fails; capture the error
-                all_results[subj] = {'error': str(exc)}
+        for subject in subjects:
+
+            base_path = BIDSPath(
+                root=self.bids_root,
+                subject=subject,
+                task=task,
+                datatype='eeg',
+                suffix='eeg',
+            )
+
+            for raw_path in base_path.match():
+                try:
+                    results = self._process_single_recording(raw_path)
+                    all_results[subject] = results
+                except Exception as exc:
+                    # Do not stop the whole batch if one subject fails; capture the error
+                    all_results[subject] = {'error': str(exc)}
+
         return all_results
 
 
@@ -372,7 +504,7 @@ def _parse_args():
         '--subjects',
         nargs='+',
         required=True,
-        help='Subject ID(s) to process. Provide multiple subject IDs separated by spaces or a single comma-separated string, e.g. --subjects 01 02 or --subjects "01,02"'
+        help='Subject ID(s) to process. Provide multiple subject IDs separated by spaces e.g. --subjects 01 02"'
     )
     parser.add_argument('--task', required=False, help='Optional BIDS task label.')
     parser.add_argument('--config', required=False, help='Path to JSON config file with preprocessing parameters.')
@@ -385,18 +517,10 @@ def main():
         with open(args.config, 'r') as f:
             config = json.load(f)
 
-    # Flatten subjects list (allow comma-separated single string or multiple args)
-    subjects_flat = []
-    for s in args.subjects:
-        if ',' in s:
-            parts = [p.strip() for p in s.split(',') if p.strip()]
-            subjects_flat.extend(parts)
-        else:
-            subjects_flat.append(s)
-
     pipeline = EEGPreprocessingPipeline(bids_root=args.bids_root, output_root=args.output_root, config=config)
-    results = pipeline.run_pipeline(subjects_flat, task=args.task)
+    results = pipeline.run_pipeline(args.subjects, task=args.task)
 
+    # TODO: better logging and result printing
     # print a summary
     print(json.dumps(results, indent=2))
 
