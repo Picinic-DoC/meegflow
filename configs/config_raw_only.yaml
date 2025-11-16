@@ -1,15 +1,13 @@
 pipeline:
   - name: load_data
-  - name: filter
+  - name: bandpass_filter
     l_freq: 1.0
     h_freq: 30.0
   - name: reference
-    type: average
+    ref_channels: average
   - name: ica
     n_components: 15
     method: fastica
     find_eog: true
     apply: true
-  - name: save_clean_raw
-  - name: generate_report
-    generate_html: false
+  - name: generate_json_report
