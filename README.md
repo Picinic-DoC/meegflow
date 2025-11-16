@@ -123,6 +123,10 @@ The pipeline is configuration-driven. You define a list of preprocessing steps, 
 - **ica**: ICA-based artifact removal
 - **find_events**: Find events in the data
 - **epoch**: Create epochs around events
+- **find_bads_channels_threshold**: Find bad channels using threshold-based rejection
+- **find_bads_channels_variance**: Find bad channels using variance-based detection
+- **find_bads_channels_high_frequency**: Find bad channels using high-frequency variance
+- **find_bads_epochs_threshold**: Find and remove bad epochs using threshold-based rejection
 - **save_clean_epochs**: Save epochs to .fif file
 - **save_clean_raw**: Save raw data to .fif file
 - **generate_report**: Generate JSON and HTML reports
@@ -156,6 +160,27 @@ See `config_raw_only.json` for a simpler pipeline without epoching:
     {"name": "reference", "type": "average"},
     {"name": "ica", "n_components": 15, "find_eog": true, "apply": true},
     {"name": "save_clean_raw"},
+    {"name": "generate_report"}
+  ]
+}
+```
+
+See `config_with_adaptive_reject.json` for a pipeline with adaptive autoreject steps:
+
+```json
+{
+  "pipeline": [
+    {"name": "load_data"},
+    {"name": "filter", "l_freq": 0.5, "h_freq": 40.0},
+    {"name": "reference", "type": "average"},
+    {"name": "ica", "n_components": 20, "find_eog": true, "apply": true},
+    {"name": "find_events"},
+    {"name": "epoch", "tmin": -0.2, "tmax": 0.8, "baseline": [null, 0]},
+    {"name": "find_bads_channels_threshold", "reject": {"eeg": 1.5e-04}, "n_epochs_bad_ch": 0.5},
+    {"name": "find_bads_channels_variance", "zscore_thresh": 4},
+    {"name": "find_bads_channels_high_frequency", "zscore_thresh": 4},
+    {"name": "find_bads_epochs_threshold", "reject": {"eeg": 1.5e-04}, "n_channels_bad_epoch": 0.1},
+    {"name": "save_clean_epochs"},
     {"name": "generate_report"}
   ]
 }
@@ -206,13 +231,39 @@ Create epochs around events.
 - `event_id`: Event IDs to include (dict or null for all)
 - `reject`: Rejection criteria (dict with channel type keys)
 
-### 7. save_clean_epochs
+### 7. find_bads_channels_threshold
+Find bad channels using threshold-based rejection. Marks channels as bad if they exceed rejection thresholds in too many epochs.
+- `picks`: Channel indices to check (default: EEG channels)
+- `reject`: Rejection thresholds by channel type (e.g., `{"eeg": 150e-6}`)
+- `n_epochs_bad_ch`: Fraction or number of epochs a channel must be bad in to be marked as bad (default: 0.5)
+
+### 8. find_bads_channels_variance
+Find bad channels using variance-based detection. Identifies channels with abnormally high or low variance.
+- `instance`: Which data instance to use - 'raw' or 'epochs' (default: 'epochs')
+- `picks`: Channel indices to check (default: EEG channels)
+- `zscore_thresh`: Z-score threshold for outlier detection (default: 4)
+- `max_iter`: Maximum iterations for iterative outlier removal (default: 2)
+
+### 9. find_bads_channels_high_frequency
+Find bad channels using high-frequency variance. Detects channels with excessive high-frequency noise.
+- `instance`: Which data instance to use - 'raw' or 'epochs' (default: 'epochs')
+- `picks`: Channel indices to check (default: EEG channels)
+- `zscore_thresh`: Z-score threshold for outlier detection (default: 4)
+- `max_iter`: Maximum iterations for iterative outlier removal (default: 2)
+
+### 10. find_bads_epochs_threshold
+Find and remove bad epochs using threshold-based rejection. Drops epochs that have too many bad channels.
+- `picks`: Channel indices to check (default: EEG channels)
+- `reject`: Rejection thresholds by channel type (e.g., `{"eeg": 150e-6}`)
+- `n_channels_bad_epoch`: Fraction or number of channels that must be bad for an epoch to be rejected (default: 0.1)
+
+### 11. save_clean_epochs
 Save epochs to .fif file. No parameters needed.
 
-### 8. save_clean_raw
+### 12. save_clean_raw
 Save raw data to .fif file. No parameters needed.
 
-### 9. generate_report
+### 13. generate_report
 Generate JSON and optionally HTML reports.
 - `generate_html`: Whether to generate HTML report (true/false)
 
