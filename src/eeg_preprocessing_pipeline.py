@@ -306,6 +306,13 @@ class EEGPreprocessingPipeline:
         picks_params = step_config.get('picks', None)
         reject = step_config.get('reject', {'eeg': 150e-6})
         n_epochs_bad_ch = step_config.get('n_epochs_bad_ch', 0.5)
+        apply_on = step_config.get('apply_on', ['epochs'])
+
+        if not isinstance(apply_on, list):
+            apply_on = [apply_on]
+
+        if any(inst not in data for inst in apply_on):
+            raise ValueError(f"find_bads_channels_threshold requires all instances of apply_on ({apply_on}) to be present in data")
 
         picks = self._get_picks(data['raw'].info, picks_params)
 
@@ -313,12 +320,14 @@ class EEGPreprocessingPipeline:
             data['epochs'], picks, reject, n_epochs_bad_ch
         )
 
-        # Mark channels as bad
         if bad_chs:
-            data['epochs'].info['bads'].extend([ch for ch in bad_chs if ch not in data['epochs'].info['bads']])
+            for instance_name in apply_on:
+                data[instance_name].info['bads'].extend([ch for ch in bad_chs if ch not in data[instance_name].info['bads']])
 
         data['preprocessing_steps'].append({
             'step': 'find_bads_channels_threshold',
+            'picks': picks_params,
+            'apply_on': apply_on,
             'reject': reject,
             'n_epochs_bad_ch': n_epochs_bad_ch,
             'bad_channels': bad_chs,
@@ -338,6 +347,13 @@ class EEGPreprocessingPipeline:
         inst = data[instance_name]
         zscore_thresh = step_config.get('zscore_thresh', 4)
         max_iter = step_config.get('max_iter', 2)
+        apply_on = step_config.get('apply_on', [instance_name])
+
+        if not isinstance(apply_on, list):
+            apply_on = [apply_on]
+
+        if any(inst not in data for inst in apply_on):
+            raise ValueError(f"find_bads_channels_threshold requires all instances of apply_on ({apply_on}) to be present in data")
 
         picks = self._get_picks(data['raw'].info, picks_params)
 
@@ -347,11 +363,14 @@ class EEGPreprocessingPipeline:
 
         # Mark channels as bad
         if bad_chs:
-            inst.info['bads'].extend([ch for ch in bad_chs if ch not in inst.info['bads']])
+            for instance_name in apply_on:
+                data[instance_name].info['bads'].extend([ch for ch in bad_chs if ch not in data[instance_name].info['bads']])
 
         data['preprocessing_steps'].append({
             'step': 'find_bads_channels_variance',
             'instance': instance_name,
+            'picks': picks_params,
+            'apply_on': apply_on,
             'zscore_thresh': zscore_thresh,
             'max_iter': max_iter,
             'bad_channels': bad_chs,
@@ -371,6 +390,13 @@ class EEGPreprocessingPipeline:
         inst = data[instance_name]
         zscore_thresh = step_config.get('zscore_thresh', 4)
         max_iter = step_config.get('max_iter', 2)
+        apply_on = step_config.get('apply_on', [instance_name])
+
+        if not isinstance(apply_on, list):
+            apply_on = [apply_on]
+        
+        if any(inst not in data for inst in apply_on):
+            raise ValueError(f"find_bads_channels_threshold requires all instances of apply_on ({apply_on}) to be present in data")
 
         picks = self._get_picks(data['raw'].info, picks_params)
 
@@ -380,11 +406,14 @@ class EEGPreprocessingPipeline:
 
         # Mark channels as bad
         if bad_chs:
-            inst.info['bads'].extend([ch for ch in bad_chs if ch not in inst.info['bads']])
+            for instance_name in apply_on:
+                data[instance_name].info['bads'].extend([ch for ch in bad_chs if ch not in data[instance_name].info['bads']])
 
         data['preprocessing_steps'].append({
             'step': 'find_bads_channels_high_frequency',
             'instance': instance_name,
+            'picks': picks_params,
+            'apply_on': apply_on,
             'zscore_thresh': zscore_thresh,
             'max_iter': max_iter,
             'bad_channels': bad_chs,
@@ -410,10 +439,12 @@ class EEGPreprocessingPipeline:
 
         # Drop bad epochs
         if len(bad_epochs) > 0:
-            data['epochs'].drop(bad_epochs, reason='AUTOREJECT')
+            data['epochs'].drop(bad_epochs, reason='ADAPTIVE AUTOREJECT')
 
         data['preprocessing_steps'].append({
             'step': 'find_bads_epochs_threshold',
+            'picks': picks_params,
+            'apply_on': ['epochs'], # only for compatibility with others reject steps
             'reject': reject,
             'n_channels_bad_epoch': n_channels_bad_epoch,
             'bad_epochs': bad_epochs.tolist() if hasattr(bad_epochs, 'tolist') else list(bad_epochs),
