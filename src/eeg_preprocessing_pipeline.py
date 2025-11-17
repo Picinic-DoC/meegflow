@@ -26,7 +26,9 @@ class EEGPreprocessingPipeline:
             'load_data': self._step_load_data,
             'bandpass_filter': self._step_bandpass_filter,
             'notch_filter': self._step_notch_filter,
+            'resample': self._step_resample,
             'reference': self._step_reference,
+            'interpolate_bad_channels': self._step_interpolate_bad_channels,
             'ica': self._step_ica,
             'find_events': self._step_find_events,
             'epoch': self._step_epoch,
@@ -34,7 +36,7 @@ class EEGPreprocessingPipeline:
             'find_bads_channels_variance': self._step_find_bads_channels_variance,
             'find_bads_channels_high_frequency': self._step_find_bads_channels_high_frequency,
             'find_bads_epochs_threshold': self._step_find_bads_epochs_threshold,
-            'save_clean_epochs': self._step_save_clean_epochs,
+            'save_clean_instance': self._step_save_clean_instance,
             'generate_json_report': self._step_generate_json_report,
             'generate_html_report': self._step_generate_html_report,
         }
@@ -62,12 +64,21 @@ class EEGPreprocessingPipeline:
         return pipeline_steps
 
     def _get_picks(self, info: mne.Info, picks_params: Any) -> List[int]:
-        # Compute picks if provided
+        # Compute picks if provided, otherwise return all EEG channels
         if isinstance(picks_params, (list, tuple)):
-            return  mne.pick_types(info, *picks_params)
-        return None
-
-    # Auxiliary functions for each preprocessing step
+            return  mne.pick_types(
+                info,
+                exclude='bads',
+                **{ch_type: True for ch_type in picks_params}
+        )
+        
+        return mne.pick_types(
+            info,
+            exclude='bads',
+            eeg=True,
+            eog=False,
+            meg=False
+        )
 
     def _step_load_data(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Load raw data into memory."""
@@ -166,6 +177,32 @@ class EEGPreprocessingPipeline:
 
         return data
 
+    def _step_resample(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Resample the data."""
+        instance = step_config.get('instance', 'raw')
+        
+        if instance not in data:
+            raise ValueError(f"resample requires '{instance}' in data")
+
+        sfreq = step_config.get('sfreq', 250)
+        npad = step_config.get('npad', 'auto')
+        n_jobs = step_config.get('n_jobs', 1)
+
+        data[instance].resample(
+            sfreq=sfreq,
+            npad=npad,
+            n_jobs=n_jobs
+        )
+
+        # Store info for reporting
+        data['preprocessing_steps'].append({
+            'step': 'resample',
+            'sfreq': sfreq,
+            'npad': npad
+        })
+
+        return data
+
     def _step_reference(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Apply re-referencing."""
 
@@ -187,7 +224,22 @@ class EEGPreprocessingPipeline:
 
         return data
 
-    # Improved ICA with safer channel selection and explicit exception handling
+    def _step_interpolate_bad_channels(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Interpolate bad channels."""
+        instance = step_config.get('instance', 'epochs')
+
+        if instance not in data:
+            raise ValueError(f"interpolate_bad_channels step requires '{instance}' to be present in data (either 'raw' or 'epochs')")
+
+        data[instance].interpolate_bads(reset_bads=True)
+
+        data['preprocessing_steps'].append({
+            'step': 'interpolate_bad_channels',
+            'instance': instance
+        })
+
+        return data
+
     def _step_ica(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Apply ICA for artifact removal."""
         if 'raw' not in data:
@@ -313,21 +365,23 @@ class EEGPreprocessingPipeline:
         n_epochs_bad_ch = step_config.get('n_epochs_bad_ch', 0.5)
         apply_on = step_config.get('apply_on', ['epochs'])
 
+        print('REJECT:', reject)
+
         if not isinstance(apply_on, list):
             apply_on = [apply_on]
 
         if any(inst not in data for inst in apply_on):
             raise ValueError(f"find_bads_channels_threshold requires all instances of apply_on ({apply_on}) to be present in data")
 
-        picks = self._get_picks(data['raw'].info, picks_params)
+        picks = self._get_picks(data['epochs'].info, picks_params)
 
         bad_chs = adaptive_reject.find_bads_channels_threshold(
             data['epochs'], picks, reject, n_epochs_bad_ch
         )
 
         if bad_chs:
-            for instance_name in apply_on:
-                data[instance_name].info['bads'].extend([ch for ch in bad_chs if ch not in data[instance_name].info['bads']])
+            for instance_to_apply in apply_on:
+                data[instance_to_apply].info['bads'].extend([ch for ch in bad_chs if ch not in data[instance_to_apply].info['bads']])
 
         data['preprocessing_steps'].append({
             'step': 'find_bads_channels_threshold',
@@ -344,15 +398,14 @@ class EEGPreprocessingPipeline:
     def _step_find_bads_channels_variance(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Find bad channels using variance-based detection."""
         # Check which instance to use
-        instance_name = step_config.get('instance', 'epochs')
-        if instance_name not in data:
-            raise ValueError(f"find_bads_channels_variance requires '{instance_name}' in data")
+        instance = step_config.get('instance', 'epochs')
+        if instance not in data:
+            raise ValueError(f"find_bads_channels_variance requires '{instance}' in data")
 
         picks_params = step_config.get('picks', None)
-        inst = data[instance_name]
         zscore_thresh = step_config.get('zscore_thresh', 4)
         max_iter = step_config.get('max_iter', 2)
-        apply_on = step_config.get('apply_on', [instance_name])
+        apply_on = step_config.get('apply_on', [instance])
 
         if not isinstance(apply_on, list):
             apply_on = [apply_on]
@@ -360,20 +413,20 @@ class EEGPreprocessingPipeline:
         if any(inst not in data for inst in apply_on):
             raise ValueError(f"find_bads_channels_threshold requires all instances of apply_on ({apply_on}) to be present in data")
 
-        picks = self._get_picks(data['raw'].info, picks_params)
+        picks = self._get_picks(data[instance].info, picks_params)
 
         bad_chs = adaptive_reject.find_bads_channels_variance(
-            inst, picks, zscore_thresh, max_iter
+            data[instance], picks, zscore_thresh, max_iter
         )
 
         # Mark channels as bad
         if bad_chs:
-            for instance_name in apply_on:
-                data[instance_name].info['bads'].extend([ch for ch in bad_chs if ch not in data[instance_name].info['bads']])
+            for instance_to_apply in apply_on:
+                data[instance_to_apply].info['bads'].extend([ch for ch in bad_chs if ch not in data[instance_to_apply].info['bads']])
 
         data['preprocessing_steps'].append({
             'step': 'find_bads_channels_variance',
-            'instance': instance_name,
+            'instance': instance,
             'picks': picks_params,
             'apply_on': apply_on,
             'zscore_thresh': zscore_thresh,
@@ -387,15 +440,14 @@ class EEGPreprocessingPipeline:
     def _step_find_bads_channels_high_frequency(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Find bad channels using high-frequency variance."""
         # Check which instance to use
-        instance_name = step_config.get('instance', 'epochs')
-        if instance_name not in data:
-            raise ValueError(f"find_bads_channels_high_frequency requires '{instance_name}' in data")
+        instance = step_config.get('instance', 'epochs')
+        if instance not in data:
+            raise ValueError(f"find_bads_channels_high_frequency requires '{instance}' in data")
 
         picks_params = step_config.get('picks', None)
-        inst = data[instance_name]
         zscore_thresh = step_config.get('zscore_thresh', 4)
         max_iter = step_config.get('max_iter', 2)
-        apply_on = step_config.get('apply_on', [instance_name])
+        apply_on = step_config.get('apply_on', [instance])
 
         if not isinstance(apply_on, list):
             apply_on = [apply_on]
@@ -403,20 +455,20 @@ class EEGPreprocessingPipeline:
         if any(inst not in data for inst in apply_on):
             raise ValueError(f"find_bads_channels_threshold requires all instances of apply_on ({apply_on}) to be present in data")
 
-        picks = self._get_picks(data['raw'].info, picks_params)
+        picks = self._get_picks(data[instance].info, picks_params)
 
         bad_chs = adaptive_reject.find_bads_channels_high_frequency(
-            inst, picks, zscore_thresh, max_iter
+            data[instance], picks, zscore_thresh, max_iter
         )
 
         # Mark channels as bad
         if bad_chs:
-            for instance_name in apply_on:
-                data[instance_name].info['bads'].extend([ch for ch in bad_chs if ch not in data[instance_name].info['bads']])
+            for instance_to_apply in apply_on:
+                data[instance_to_apply].info['bads'].extend([ch for ch in bad_chs if ch not in data[instance_to_apply].info['bads']])
 
         data['preprocessing_steps'].append({
             'step': 'find_bads_channels_high_frequency',
-            'instance': instance_name,
+            'instance': instance,
             'picks': picks_params,
             'apply_on': apply_on,
             'zscore_thresh': zscore_thresh,
@@ -436,7 +488,7 @@ class EEGPreprocessingPipeline:
         reject = step_config.get('reject', {'eeg': 150e-6})
         n_channels_bad_epoch = step_config.get('n_channels_bad_epoch', 0.1)
 
-        picks = self._get_picks(data['raw'].info, picks_params)
+        picks = self._get_picks(data['epochs'].info, picks_params)
 
         bad_epochs = adaptive_reject.find_bads_epochs_threshold(
             data['epochs'], picks, reject, n_channels_bad_epoch
@@ -459,15 +511,16 @@ class EEGPreprocessingPipeline:
 
         return data
 
-    def _step_save_clean_epochs(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+    def _step_save_clean_instance(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Save clean epochs to a BIDS-derivatives-compatible path."""
-        if 'epochs' not in data:
-            raise ValueError("save_clean_epochs requires 'epochs' in data")
-
+        instance = step_config.get('instance', 'epochs')
         overwrite = step_config.get('overwrite', True)
 
+        if instance not in data:
+            raise ValueError(f"save_clean_instances step requires '{instance}' to be present in data (either 'raw' or 'epochs')")
+        
         # Derivatives root for this pipeline
-        deriv_root = self.bids_root / "derivatives" / "nice_preprocessing" / "epochs"
+        deriv_root = self.bids_root / "derivatives" / "nice_preprocessing" / instance
 
         bids_path = BIDSPath(
             subject=data['subject'],
@@ -487,12 +540,12 @@ class EEGPreprocessingPipeline:
         # Ensure directory exists
         bids_path.mkdir(exist_ok=True)
 
-        # Save epochs
-        data['epochs'].save(bids_path.fpath, overwrite=overwrite)
+        # Save instance
+        data[instance].save(bids_path.fpath, overwrite=overwrite)
 
-        # Store paths & metadata in the data dict
-        data['epochs_file'] = str(bids_path)
-        data['n_epochs'] = len(data['epochs'])
+        # Store paths
+        data[f'{instance}_file'] = str(bids_path)
+
         return data
 
     def _step_generate_json_report(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -763,6 +816,7 @@ class EEGPreprocessingPipeline:
                     # Do not stop the whole batch if one subject fails; capture the error
                     logger.error(f"Error processing {recording_name}: {str(exc)}")
                     all_results.setdefault(subject, []).append({'error': str(exc)})
+                    raise exc
                 finally:
                     # Remove the step task after this recording is done
                     progress.remove_task(step_task)
