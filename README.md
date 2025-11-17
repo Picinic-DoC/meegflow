@@ -176,7 +176,7 @@ pipeline:
     h_freq: 40.0
   - name: reference
     ref_channels: average
-    projection: false
+    instance: raw
   - name: ica
     n_components: 20
     method: fastica
@@ -216,34 +216,33 @@ pipeline:
   - name: generate_json_report
 ```
 
-See `configs/config_with_adaptive_reject.yaml` for a pipeline with adaptive autoreject steps:
+See `configs/config_with_adaptive_reject.yaml` for a pipeline with adaptive autoreject steps. This config includes additional preprocessing steps like montage setting, notch filtering, and resampling:
 
 ```yaml
 pipeline:
+  - name: set_montage
+    montage: standard_1020
   - name: load_data
   - name: bandpass_filter
     l_freq: 0.5
-    h_freq: 40.0
-  - name: reference
-    ref_channels: average
-    projection: false
-  - name: ica
-    n_components: 20
-    method: fastica
-    find_eog: true
-    find_ecg: false
-    apply: true
+    h_freq: 45.0
+  - name: notch_filter
+    freqs: [50.0, 100.0]
+  - name: resample
+    instance: raw
+    sfreq: 250.0
+    npad: 'auto'
   - name: find_events
     shortest_event: 1
   - name: epoch
     tmin: -0.2
     tmax: 0.8
-    baseline: [null, 0]
+    baseline: [null, 0.0]
     event_id: null
     reject: null
   - name: find_bads_channels_threshold
     reject:
-      eeg: 1.5e-04
+      eeg: 1.0e-4
     n_epochs_bad_ch: 0.5
   - name: find_bads_channels_variance
     instance: epochs
@@ -255,10 +254,16 @@ pipeline:
     max_iter: 2
   - name: find_bads_epochs_threshold
     reject:
-      eeg: 1.5e-04
+      eeg: 1.0e-4
     n_channels_bad_epoch: 0.1
+  - name: reference
+    instance: epochs
+    ref_channels: average
+  - name: interpolate_bad_channels
+    instance: epochs
   - name: save_clean_instance
     instance: epochs
+    overwrite: true
   - name: generate_json_report
   - name: generate_html_report
 ```
