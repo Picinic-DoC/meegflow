@@ -147,6 +147,14 @@ def create_preprocessing_steps_table(preprocessing_steps: List[Dict[str, Any]]) 
     """
     Create an HTML table with collapsible rows for preprocessing steps.
     
+    Uses MNE Report table styling with bootstrap-table classes.
+    Each step's parameters are displayed in a two-column table:
+    - First column: parameter keys
+    - Second column: parameter values
+      - Numbers displayed as numbers
+      - Lists displayed as bullet points
+      - Dicts displayed as prettified JSON with indent 4
+    
     Parameters
     ----------
     preprocessing_steps : list of dict
@@ -160,55 +168,69 @@ def create_preprocessing_steps_table(preprocessing_steps: List[Dict[str, Any]]) 
     if not preprocessing_steps:
         return ""
     
-    # Create HTML table with collapsible rows
+    def format_value(value):
+        """Format a value based on its type."""
+        if isinstance(value, dict):
+            # Format dicts as prettified JSON with indent 4
+            return f'<pre style="margin: 0; background-color: #f8f9fa; padding: 8px; border-radius: 4px;">{json.dumps(value, indent=4)}</pre>'
+        elif isinstance(value, list):
+            # Format lists as bullet points
+            if not value:
+                return '<em>empty list</em>'
+            bullet_points = ''.join([f'<li>{item}</li>' for item in value])
+            return f'<ul style="margin: 0; padding-left: 20px;">{bullet_points}</ul>'
+        elif isinstance(value, (int, float)):
+            # Format numbers as numbers (not strings)
+            return str(value)
+        elif value is None:
+            return '<em>None</em>'
+        else:
+            # Format everything else as string
+            return str(value)
+    
+    # Create HTML with collapsible sections for each step
     html_content = """
     <style>
-        .steps-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-            font-family: Arial, sans-serif;
-        }
-        .steps-table th, .steps-table td {
-            border: 1px solid #ddd;
-            padding: 12px;
-            text-align: left;
-        }
-        .steps-table th {
-            background-color: #4CAF50;
-            color: white;
-            font-weight: bold;
-        }
-        .steps-table tr:nth-child(even) {
-            background-color: #f9f9f9;
+        .step-container {
+            margin-bottom: 20px;
         }
         .step-header {
             cursor: pointer;
-            background-color: #f2f2f2;
+            padding: 12px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
             font-weight: bold;
             user-select: none;
+            transition: background-color 0.2s;
         }
         .step-header:hover {
-            background-color: #e0e0e0;
+            background-color: #e9ecef;
+        }
+        .step-header .toggle-icon {
+            float: right;
+            font-weight: bold;
         }
         .step-details {
             display: none;
-            padding: 15px;
-            background-color: #fafafa;
-            border-left: 3px solid #4CAF50;
+            margin-top: 10px;
         }
         .step-details.active {
             display: block;
         }
-        .step-details pre {
-            background-color: #f4f4f4;
-            padding: 10px;
-            border-radius: 4px;
-            overflow-x: auto;
+        .params-table {
+            width: 100%;
+            margin-top: 10px;
         }
-        .toggle-icon {
-            float: right;
-            font-weight: bold;
+        .params-table td {
+            padding: 8px;
+            border: 1px solid #dee2e6;
+            vertical-align: top;
+        }
+        .params-table td:first-child {
+            background-color: #f8f9fa;
+            font-weight: 500;
+            width: 30%;
         }
     </style>
     <script>
@@ -224,55 +246,40 @@ def create_preprocessing_steps_table(preprocessing_steps: List[Dict[str, Any]]) 
             }
         }
     </script>
-    <h2>Preprocessing Steps</h2>
-    <table class="steps-table">
-        <thead>
-            <tr>
-                <th style="width: 60px;">#</th>
-                <th>Step Name</th>
-                <th style="width: 120px;">Details</th>
-            </tr>
-        </thead>
-        <tbody>
     """
     
     for idx, step in enumerate(preprocessing_steps, 1):
         step_name = step.get('step', 'Unknown')
         step_id = f"step-{idx}"
         
-        # Create header row
+        # Create collapsible section for this step
         html_content += f"""
-            <tr class="step-header" onclick="toggleStep('{step_id}')">
-                <td>{idx}</td>
-                <td>{step_name}</td>
-                <td><span class="toggle-icon" id="icon-{step_id}">▼</span> Click to expand</td>
-            </tr>
-            <tr>
-                <td colspan="3" style="padding: 0;">
-                    <div class="step-details" id="details-{step_id}">
+        <div class="step-container">
+            <div class="step-header" onclick="toggleStep('{step_id}')">
+                <span>Step {idx}: {step_name}</span>
+                <span class="toggle-icon" id="icon-{step_id}">▼</span>
+            </div>
+            <div class="step-details" id="details-{step_id}">
+                <table class="params-table table table-hover">
+                    <tbody>
         """
         
-        # Add step parameters
-        html_content += "<h3>Parameters:</h3><pre>"
+        # Add each parameter as a row in the table
         for key, value in step.items():
             if key != 'step':
-                # Format the value nicely
-                if isinstance(value, (list, dict)):
-                    value_str = json.dumps(value, indent=2)
-                else:
-                    value_str = str(value)
-                html_content += f"{key}: {value_str}\n"
-        html_content += "</pre>"
+                formatted_value = format_value(value)
+                html_content += f"""
+                        <tr>
+                            <td>{key}</td>
+                            <td>{formatted_value}</td>
+                        </tr>
+                """
         
         html_content += """
-                    </div>
-                </td>
-            </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
         """
-    
-    html_content += """
-        </tbody>
-    </table>
-    """
     
     return html_content

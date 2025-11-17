@@ -114,12 +114,15 @@ def test_create_preprocessing_steps_table():
     html = create_preprocessing_steps_table(steps)
     
     # Check that HTML contains expected elements
-    assert '<table class="steps-table">' in html, "HTML should contain table"
+    assert '<table class="params-table table table-hover">' in html, "HTML should contain params table"
     assert 'load_data' in html, "HTML should contain step name"
     assert 'bandpass_filter' in html, "HTML should contain step name"
     assert '0.5' in html, "HTML should contain parameter value"
     assert 'toggleStep' in html, "HTML should contain toggle function"
     assert 'step-details' in html, "HTML should contain details div"
+    # Check for two-column table structure
+    assert '<td>l_freq</td>' in html, "HTML should have key in first column"
+    assert '<td>0.5</td>' in html, "HTML should have value in second column"
     
     print("✓ create_preprocessing_steps_table test passed")
 
