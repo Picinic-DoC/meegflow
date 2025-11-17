@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock, call
 from io import StringIO
+import numpy as np
 
 # Find the repository root
 repo_root = Path(__file__).parent.parent
@@ -53,6 +54,7 @@ def test_cli_log_file_argument():
 def test_run_pipeline_creates_progress():
     """Test that run_pipeline creates progress bars."""
     from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    import mne
     
     # Mock the necessary components
     with patch('eeg_preprocessing_pipeline.find_matching_paths') as mock_find_paths, \
@@ -72,10 +74,17 @@ def test_run_pipeline_creates_progress():
         
         mock_find_paths.return_value = [mock_bids_path]
         
-        # Create a mock raw object
+        # Create a mock raw object with proper MNE Info object
         mock_raw = Mock()
-        mock_raw.info = {'nchan': 64, 'sfreq': 500}
+        # Create a real MNE Info object for the mock
+        info = mne.create_info(
+            ch_names=['EEG001', 'EEG002'],
+            sfreq=500,
+            ch_types='eeg'
+        )
+        mock_raw.info = info
         mock_raw.n_times = 1000
+        mock_raw.get_data = Mock(return_value=np.random.randn(2, 1000))
         mock_read_raw.return_value = mock_raw
         
         # Setup Progress mock
@@ -83,10 +92,10 @@ def test_run_pipeline_creates_progress():
         mock_progress_class.return_value.__enter__ = Mock(return_value=mock_progress_instance)
         mock_progress_class.return_value.__exit__ = Mock(return_value=False)
         
-        # Create pipeline with minimal config (no steps to avoid complexity)
+        # Create pipeline with minimal config (just load_data to avoid complexity)
         pipeline = EEGPreprocessingPipeline(
             bids_root='/tmp/test',
-            config={'pipeline': []}  # Empty pipeline for testing
+            config={'pipeline': [{'name': 'load_data'}]}  # Minimal pipeline for testing
         )
         
         # Run pipeline
