@@ -62,7 +62,7 @@ def test_bad_channels_topoplot_generation():
         # Initialize pipeline
         pipeline = EEGPreprocessingPipeline(bids_root=bids_root)
         
-        # Create mock data dictionary
+        # Create mock data dictionary with preprocessing steps that have bad channels
         data = {
             'subject': '01',
             'task': 'test',
@@ -70,7 +70,12 @@ def test_bad_channels_topoplot_generation():
             'acquisition': None,
             'run': None,
             'raw': raw,
-            'preprocessing_steps': []
+            'preprocessing_steps': [
+                {
+                    'step': 'find_bads_channels_threshold',
+                    'bad_channels': ['F3', 'P4']
+                }
+            ]
         }
         
         # Call the HTML report generation step
