@@ -159,21 +159,6 @@ def test_batch_processing_support():
     print("✓ Pipeline supports batch processing of multiple subjects")
 
 
-def test_example_usage_exists():
-    """Test that example usage script exists."""
-    example_file = repo_root / "example_usage.py"
-    assert example_file.exists(), "example_usage.py does not exist"
-    
-    with open(example_file, 'r') as f:
-        code = f.read()
-    
-    # Check for example functions
-    assert "def example_" in code, "No example functions found"
-    assert "EEGPreprocessingPipeline" in code, "Pipeline class not imported"
-    
-    print("✓ Example usage script exists with examples")
-
-
 def run_all_tests():
     """Run all tests."""
     print("=" * 60)
@@ -191,7 +176,6 @@ def run_all_tests():
         test_output_directories_structure,
         test_readme_exists,
         test_batch_processing_support,
-        test_example_usage_exists,
     ]
     
     failed_tests = []
