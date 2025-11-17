@@ -62,7 +62,7 @@ def test_pipeline_has_required_methods():
         "_step_ica",
         "_step_find_events",
         "_step_epoch",
-        "_step_save_clean_epochs",
+        "_step_save_clean_instance",
         "_step_generate_json_report",
         "_step_generate_html_report",
         "run_pipeline"
