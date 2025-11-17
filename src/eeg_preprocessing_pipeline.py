@@ -184,6 +184,7 @@ class EEGPreprocessingPipeline:
         if instance not in data:
             raise ValueError(f"resample requires '{instance}' in data")
 
+        resample_events = step_config.get('resample_events', False)
         sfreq = step_config.get('sfreq', 250)
         npad = step_config.get('npad', 'auto')
         n_jobs = step_config.get('n_jobs', 1)
@@ -194,11 +195,20 @@ class EEGPreprocessingPipeline:
             n_jobs=n_jobs
         )
 
+        if resample_events and 'events' in data:
+            mne.events.resample_events(
+                data['events'],
+                data['events_sfreq'],
+                sfreq
+            ) 
+
         # Store info for reporting
         data['preprocessing_steps'].append({
             'step': 'resample',
+            'instance': instance,
+            'resample_events': resample_events,
             'sfreq': sfreq,
-            'npad': npad
+            'npad': npad,
         })
 
         return data
@@ -313,6 +323,7 @@ class EEGPreprocessingPipeline:
                 # re-raise if it's some other error
                 raise
         data['events'] = events
+        data['events_sfreq'] = data['raw'].info['sfreq']
 
         data['preprocessing_steps'].append({
             'step': 'find_events',
@@ -617,13 +628,34 @@ class EEGPreprocessingPipeline:
                 # If adding ICA fails, continue without stopping the pipeline
                 pass
 
+        if 'raw' in data:
+            try:
+                html_report.add_raw(raw=data['raw'], title='Clean Raw Data')
+            except Exception:
+                pass
+
+        if 'events' in data and data['events'] is not None:
+            try:
+                html_report.add_events(
+                    events=data['events'],
+                    sfreq=data['events_sfreq'],
+                    title='Found Events',
+                )
+            except Exception:
+                pass
+
         if 'epochs' in data and data['epochs'] is not None:
             try:
                 html_report.add_epochs(epochs=data['epochs'], title='Clean Epochs')
                 evoked = data['epochs'].average()
-                html_report.add_evokeds(evokeds=evoked, titles='Average Evoked Response')
+                html_report.add_evokeds(
+                    evokeds=evoked,
+                    n_time_points=5,
+                    titles='Average Evoked Response'
+                )
             except Exception:
                 pass
+
 
         # Derivatives root for this pipeline
         deriv_root = self.bids_root / "derivatives" / "nice_preprocessing" / "reports"
