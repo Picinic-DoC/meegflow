@@ -156,7 +156,7 @@ def test_preprocessing_steps_table_generation():
         
         # Check that preprocessing steps section exists
         assert 'Preprocessing Steps' in html_content, "Preprocessing steps section not found"
-        assert 'steps-table' in html_content, "Steps table not found"
+        assert 'params-table' in html_content, "Params table not found"
         
         # Check for collapsible functionality
         assert 'toggleStep' in html_content, "Toggle function not found"
