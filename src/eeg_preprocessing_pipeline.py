@@ -618,8 +618,62 @@ class EEGPreprocessingPipeline:
 
     def _step_generate_html_report(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Generate HTML reports."""
+        import matplotlib.pyplot as plt
+        from report import (
+            collect_bad_channels_from_steps,
+            create_bad_channels_topoplot,
+            create_preprocessing_steps_table
+        )
 
         html_report = mne.Report(title=f'Preprocessing Report - Subject {data["subject"]}')
+
+        # Add bad channels topoplot section
+        try:
+            # Collect bad channels from all preprocessing steps
+            bad_channels = collect_bad_channels_from_steps(
+                data.get('preprocessing_steps', [])
+            )
+            
+            # Get info from raw to use its montage
+            info = None
+            if 'raw' in data and data['raw'] is not None:
+                info = data['raw'].info
+            elif 'epochs' in data and data['epochs'] is not None:
+                info = data['epochs'].info
+            
+            # Create topoplot if we have bad channels and info
+            if info is not None and bad_channels:
+                fig = create_bad_channels_topoplot(info, bad_channels)
+                
+                if fig is not None:
+                    # Add to report
+                    html_report.add_figure(
+                        fig=fig,
+                        title='Bad Channels',
+                        caption=f'Topoplot showing {len(bad_channels)} bad channels marked with red crosses'
+                    )
+                    plt.close(fig)
+        except Exception as e:
+            # If adding bad channels topoplot fails, continue without stopping the pipeline
+            logger.warning(f"Failed to add bad channels topoplot: {e}")
+            pass
+
+        # Add preprocessing steps table section
+        try:
+            if 'preprocessing_steps' in data and len(data['preprocessing_steps']) > 0:
+                # Create HTML table with collapsible rows
+                html_content = create_preprocessing_steps_table(data['preprocessing_steps'])
+                
+                if html_content:
+                    # Add the HTML table to the report
+                    html_report.add_html(
+                        html=html_content,
+                        title='Preprocessing Steps',
+                    )
+        except Exception as e:
+            # If adding preprocessing steps table fails, continue without stopping the pipeline
+            logger.warning(f"Failed to add preprocessing steps table: {e}")
+            pass
 
         if 'ica' in data:
             try:
