@@ -57,7 +57,7 @@ class EEGPreprocessingPipeline:
                 {'name': 'load_data'},
                 {'name': 'bandpass_filter', 'l_freq': 0.5, 'h_freq': 45.0},
                 {'name': 'reference', 'type': 'average'},
-                {'name': 'save_clean_epochs'},
+                {'name': 'save_clean_instance', 'instance': 'epochs'},
                 {'name': 'generate_json_report'},
                 {'name': 'generate_html_report'},
             ]

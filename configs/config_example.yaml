@@ -15,6 +15,7 @@ pipeline:
     event_id: null
     reject:
       eeg: 1.5e-04
-  - name: save_clean_epochs
+  - name: save_clean_instance
+    instance: epochs
   - name: generate_json_report
   - name: generate_html_report

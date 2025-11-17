@@ -30,6 +30,11 @@ cd nice-preprocessing
 pip install -r requirements.txt
 ```
 
+3. (Optional) Install the package to use the `eeg-preprocess` command:
+```bash
+pip install -e .
+```
+
 ## Usage
 
 ### Process Multiple Subjects
@@ -37,17 +42,27 @@ pip install -r requirements.txt
 Run the preprocessing pipeline on multiple subjects:
 
 ```bash
-python -m cli \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 03 \
     --tasks rest \
-    --config config_example.yaml
+    --config configs/config_example.yaml
+```
+
+If you installed the package with `pip install -e .`, you can use the `eeg-preprocess` command:
+
+```bash
+eeg-preprocess \
+    --bids-root /path/to/bids/dataset \
+    --subjects 01 02 03 \
+    --tasks rest \
+    --config configs/config_example.yaml
 ```
 
 Process all subjects with a specific task:
 
 ```bash
-eeg-preprocess \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --tasks rest
 ```
@@ -55,7 +70,7 @@ eeg-preprocess \
 Process specific subjects with multiple tasks:
 
 ```bash
-python eeg_preprocessing_pipeline.py \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 \
     --tasks rest task1 task2
@@ -99,7 +114,11 @@ The pipeline creates outputs in a BIDS-derivatives structure:
 
 ```
 derivatives/nice_preprocessing/
-├── epochs/
+├── epochs/              # When saving epochs with save_clean_instance
+│   └── sub-01/
+│       └── eeg/
+│           └── sub-01_task-rest_proc-clean_desc-cleaned_epo.fif
+├── raw/                 # When saving raw data with save_clean_instance
 │   └── sub-01/
 │       └── eeg/
 │           └── sub-01_task-rest_proc-clean_desc-cleaned_epo.fif
@@ -112,8 +131,9 @@ derivatives/nice_preprocessing/
 
 ### Output Details
 
-1. **epochs/**: Contains MNE epochs objects saved in `.fif` format (if `save_clean_epochs` step is included)
-   - Can be loaded with `mne.read_epochs()`
+1. **epochs/** or **raw/**: Contains MNE data objects saved in `.fif` format (if `save_clean_instance` step is included)
+   - Epochs can be loaded with `mne.read_epochs()`
+   - Raw data can be loaded with `mne.io.read_raw_fif()`
    - Includes all preprocessing (filtering, artifact removal, baseline correction)
 
 2. **reports/**: Contains preprocessing reports
@@ -126,10 +146,13 @@ The pipeline is configuration-driven. You define a list of preprocessing steps, 
 
 ### Available Steps
 
+- **set_montage**: Set channel montage for EEG data
 - **load_data**: Load raw data into memory
 - **bandpass_filter**: Apply bandpass filtering
 - **notch_filter**: Apply notch filtering
+- **resample**: Resample data to different sampling frequency
 - **reference**: Apply re-referencing
+- **interpolate_bad_channels**: Interpolate bad channels
 - **ica**: ICA-based artifact removal
 - **find_events**: Find events in the data
 - **epoch**: Create epochs around events
@@ -137,7 +160,7 @@ The pipeline is configuration-driven. You define a list of preprocessing steps, 
 - **find_bads_channels_variance**: Find bad channels using variance-based detection
 - **find_bads_channels_high_frequency**: Find bad channels using high-frequency variance
 - **find_bads_epochs_threshold**: Find and remove bad epochs using threshold-based rejection
-- **save_clean_epochs**: Save epochs to .fif file
+- **save_clean_instance**: Save raw or epochs data to .fif file
 - **generate_json_report**: Generate JSON report
 - **generate_html_report**: Generate HTML report
 
@@ -153,7 +176,7 @@ pipeline:
     h_freq: 40.0
   - name: reference
     ref_channels: average
-    projection: false
+    instance: raw
   - name: ica
     n_components: 20
     method: fastica
@@ -169,7 +192,8 @@ pipeline:
     event_id: null
     reject:
       eeg: 1.5e-04
-  - name: save_clean_epochs
+  - name: save_clean_instance
+    instance: epochs
   - name: generate_json_report
   - name: generate_html_report
 ```
@@ -192,34 +216,33 @@ pipeline:
   - name: generate_json_report
 ```
 
-See `configs/config_with_adaptive_reject.yaml` for a pipeline with adaptive autoreject steps:
+See `configs/config_with_adaptive_reject.yaml` for a pipeline with adaptive autoreject steps. This config includes additional preprocessing steps like montage setting, notch filtering, and resampling:
 
 ```yaml
 pipeline:
+  - name: set_montage
+    montage: standard_1020
   - name: load_data
   - name: bandpass_filter
     l_freq: 0.5
-    h_freq: 40.0
-  - name: reference
-    ref_channels: average
-    projection: false
-  - name: ica
-    n_components: 20
-    method: fastica
-    find_eog: true
-    find_ecg: false
-    apply: true
+    h_freq: 45.0
+  - name: notch_filter
+    freqs: [50.0, 100.0]
+  - name: resample
+    instance: raw
+    sfreq: 250.0
+    npad: 'auto'
   - name: find_events
     shortest_event: 1
   - name: epoch
     tmin: -0.2
     tmax: 0.8
-    baseline: [null, 0]
+    baseline: [null, 0.0]
     event_id: null
     reject: null
   - name: find_bads_channels_threshold
     reject:
-      eeg: 1.5e-04
+      eeg: 1.0e-4
     n_epochs_bad_ch: 0.5
   - name: find_bads_channels_variance
     instance: epochs
@@ -231,9 +254,16 @@ pipeline:
     max_iter: 2
   - name: find_bads_epochs_threshold
     reject:
-      eeg: 1.5e-04
+      eeg: 1.0e-4
     n_channels_bad_epoch: 0.1
-  - name: save_clean_epochs
+  - name: reference
+    instance: epochs
+    ref_channels: average
+  - name: interpolate_bad_channels
+    instance: epochs
+  - name: save_clean_instance
+    instance: epochs
+    overwrite: true
   - name: generate_json_report
   - name: generate_html_report
 ```
@@ -267,10 +297,16 @@ These arguments use the same matching logic as `mne-bids` `find_matching_paths`.
 
 Each step can be customized through the configuration:
 
-### 1. load_data
+### 1. set_montage
+Set channel montage for EEG data. Useful when data lacks electrode position information.
+- `montage`: Name of standard montage to use (default: 'standard_1020')
+  - Examples: 'standard_1020', 'standard_1005', 'biosemi64', etc.
+  - See MNE documentation for available montages
+
+### 2. load_data
 Loads raw data into memory. No parameters needed.
 
-### 2. bandpass_filter
+### 3. bandpass_filter
 Apply bandpass filtering.
 - `l_freq`: High-pass filter frequency (Hz)
 - `h_freq`: Low-pass filter frequency (Hz)
@@ -279,7 +315,7 @@ Apply bandpass filtering.
 - `picks`: Optional channel indices to filter
 - `n_jobs`: Number of parallel jobs (default: 1)
 
-### 3. notch_filter
+### 4. notch_filter
 Apply notch filtering to remove line noise.
 - `freqs`: Frequencies to notch filter (e.g., [50.0, 100.0])
 - `notch_widths`: Width of notch filters (optional)
@@ -287,14 +323,24 @@ Apply notch filtering to remove line noise.
 - `picks`: Optional channel indices to filter
 - `n_jobs`: Number of parallel jobs (default: 1)
 
-### 4. reference
+### 5. resample
+Resample the data to a different sampling frequency.
+- `instance`: Which data instance to resample - 'raw' or 'epochs' (default: 'raw')
+- `sfreq`: Target sampling frequency in Hz (default: 250)
+- `npad`: Padding to use for resampling (default: 'auto')
+- `resample_events`: Whether to also resample events (default: false)
+- `n_jobs`: Number of parallel jobs (default: 1)
+
+### 6. reference
 Apply re-referencing.
 - `ref_channels`: Reference channels ('average' or channel names)
 - `instance`: Which data instance to reference - 'raw' or 'epochs' (default: 'epochs')
-- `projection`: Whether to use projection (true/false, default: true)
-- `apply`: Whether to apply the reference immediately (true/false, default: true)
 
-### 5. ica
+### 7. interpolate_bad_channels
+Interpolate bad channels using spherical spline interpolation.
+- `instance`: Which data instance to interpolate - 'raw' or 'epochs' (default: 'epochs')
+
+### 8. ica
 ICA-based artifact removal.
 - `n_components`: Number of ICA components (default: 20)
 - `method`: ICA method ('fastica', 'infomax', 'picard', default: 'fastica')
@@ -303,11 +349,11 @@ ICA-based artifact removal.
 - `find_ecg`: Automatically find ECG artifacts (true/false, default: false)
 - `apply`: Apply ICA to remove artifacts (true/false, default: true)
 
-### 6. find_events
+### 9. find_events
 Find events in the data.
 - `shortest_event`: Minimum event duration in samples (default: 1)
 
-### 7. epoch
+### 10. epoch
 Create epochs around events.
 - `tmin`: Start time before event (seconds, default: -0.2)
 - `tmax`: End time after event (seconds, default: 0.5)
@@ -315,14 +361,14 @@ Create epochs around events.
 - `event_id`: Event IDs to include (dict or null for all)
 - `reject`: Rejection criteria (dict with channel type keys, optional)
 
-### 8. find_bads_channels_threshold
+### 11. find_bads_channels_threshold
 Find bad channels using threshold-based rejection. Marks channels as bad if they exceed rejection thresholds in too many epochs.
 - `picks`: Channel indices to check (optional, default: EEG channels)
 - `reject`: Rejection thresholds by channel type (e.g., `{"eeg": 150e-6}`)
 - `n_epochs_bad_ch`: Fraction or number of epochs a channel must be bad in to be marked as bad (default: 0.5)
 - `apply_on`: List of instances to mark bad channels on (default: ['epochs'])
 
-### 9. find_bads_channels_variance
+### 12. find_bads_channels_variance
 Find bad channels using variance-based detection. Identifies channels with abnormally high or low variance.
 - `instance`: Which data instance to use - 'raw' or 'epochs' (default: 'epochs')
 - `picks`: Channel indices to check (optional, default: EEG channels)
@@ -330,7 +376,7 @@ Find bad channels using variance-based detection. Identifies channels with abnor
 - `max_iter`: Maximum iterations for iterative outlier removal (default: 2)
 - `apply_on`: List of instances to mark bad channels on (default: [instance])
 
-### 10. find_bads_channels_high_frequency
+### 13. find_bads_channels_high_frequency
 Find bad channels using high-frequency variance. Detects channels with excessive high-frequency noise.
 - `instance`: Which data instance to use - 'raw' or 'epochs' (default: 'epochs')
 - `picks`: Channel indices to check (optional, default: EEG channels)
@@ -338,20 +384,21 @@ Find bad channels using high-frequency variance. Detects channels with excessive
 - `max_iter`: Maximum iterations for iterative outlier removal (default: 2)
 - `apply_on`: List of instances to mark bad channels on (default: [instance])
 
-### 11. find_bads_epochs_threshold
+### 14. find_bads_epochs_threshold
 Find and remove bad epochs using threshold-based rejection. Drops epochs that have too many bad channels.
 - `picks`: Channel indices to check (optional, default: EEG channels)
 - `reject`: Rejection thresholds by channel type (e.g., `{"eeg": 150e-6}`)
 - `n_channels_bad_epoch`: Fraction or number of channels that must be bad for an epoch to be rejected (default: 0.1)
 
-### 12. save_clean_epochs
-Save epochs to .fif file in BIDS-derivatives format.
+### 15. save_clean_instance
+Save clean raw or epochs data to .fif file in BIDS-derivatives format.
+- `instance`: Which data instance to save - 'raw' or 'epochs' (default: 'epochs')
 - `overwrite`: Whether to overwrite existing files (default: true)
 
-### 13. generate_json_report
+### 16. generate_json_report
 Generate JSON report with preprocessing information. No parameters needed.
 
-### 14. generate_html_report
+### 17. generate_html_report
 Generate HTML report with interactive visualizations. No parameters needed.
 
 ## Batch Processing
@@ -360,19 +407,19 @@ The pipeline processes multiple subjects and files sequentially. You can process
 
 ```bash
 # Process specific subjects with a specific task
-python eeg_preprocessing_pipeline.py \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 03 04 05 \
     --tasks rest \
-    --config config_example.yaml
+    --config configs/config_example.yaml
 
 # Process all subjects in the dataset
-python eeg_preprocessing_pipeline.py \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
-    --config config_example.yaml
+    --config configs/config_example.yaml
 
 # Process specific sessions for specific subjects
-python eeg_preprocessing_pipeline.py \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 \
     --sessions 01 02 \
@@ -403,14 +450,14 @@ The pipeline uses MNE's logger for all output messages. You can:
 
 **Console Output (default)**:
 ```bash
-python -m cli \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02
 ```
 
 **Log to File**:
 ```bash
-python -m cli \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 \
     --log-file /path/to/logs/pipeline.log
@@ -418,7 +465,7 @@ python -m cli \
 
 **Adjust Logging Level**:
 ```bash
-python -m cli \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 \
     --log-level DEBUG
