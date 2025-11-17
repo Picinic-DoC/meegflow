@@ -9,7 +9,9 @@ from pathlib import Path
 from typing import Iterable, Union, Dict, Any, List
 import json
 import mne
+from mne.utils import logger
 from mne_bids import BIDSPath, read_raw_bids, find_matching_paths
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 import adaptive_reject
 
 
@@ -582,7 +584,7 @@ class EEGPreprocessingPipeline:
         data['html_report'] = str(bids_path)
         return data
 
-    def _process_single_recording(self, bids_path: BIDSPath) -> Dict[str, Any]:
+    def _process_single_recording(self, bids_path: BIDSPath, progress: Progress = None, task_id: int = None) -> Dict[str, Any]:
         """Process a single subject using the configured pipeline steps."""
         # Initialize data dictionary
         data = {
@@ -595,20 +597,31 @@ class EEGPreprocessingPipeline:
         }
 
         # Read BIDS data
+        logger.info(f"Reading BIDS data from {bids_path.fpath}")
         data['raw'] = read_raw_bids(bids_path=bids_path)
 
         # Get pipeline steps from config
         pipeline_steps = self._get_pipeline_steps()
 
         # Execute each step in order
-        for step in pipeline_steps:
+        for step_idx, step in enumerate(pipeline_steps):
             step_name = step.get('name')
             if step_name not in self.step_functions:
                 raise ValueError(f"Unknown step '{step_name}' in pipeline execution")
 
+            # Update progress for this step
+            if progress and task_id is not None:
+                progress.update(task_id, description=f"[cyan]Step: {step_name}", completed=step_idx)
+            
+            logger.info(f"Executing step: {step_name}")
+            
             # Execute the step with its configuration
             step_config = {k: v for k, v in step.items() if k != 'name'}
             data = self.step_functions[step_name](data, step_config)
+
+        # Mark as complete
+        if progress and task_id is not None:
+            progress.update(task_id, completed=len(pipeline_steps))
 
         # Prepare results
         results = {
@@ -625,6 +638,7 @@ class EEGPreprocessingPipeline:
             if key in data:
                 results[key] = data[key]
 
+        logger.info(f"Successfully processed {bids_path.basename}")
         return results
 
     def run_pipeline(
@@ -671,6 +685,7 @@ class EEGPreprocessingPipeline:
             Dictionary mapping subject -> list of results for each matching file.
         """
         # Use find_matching_paths to get all matching files
+        logger.info("Finding matching paths...")
         matching_paths = find_matching_paths(
             root=self.bids_root,
             subjects=subjects,
@@ -687,16 +702,55 @@ class EEGPreprocessingPipeline:
             datatypes='eeg',
         )
 
+        # Convert to list to get count
+        matching_paths = list(matching_paths)
+        logger.info(f"Found {len(matching_paths)} matching file(s) to process")
+
         all_results = {}
         
-        # Process each matching path
-        for raw_path in matching_paths:
-            subject = raw_path.subject
-            try:
-                results = self._process_single_recording(raw_path)
-                all_results.setdefault(subject, []).append(results)
-            except Exception as exc:
-                # Do not stop the whole batch if one subject fails; capture the error
-                all_results.setdefault(subject, []).append({'error': str(exc)})
+        # Create progress bars for matched paths and preprocessing steps
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeRemainingColumn(),
+        ) as progress:
+            
+            # Overall progress for all recordings
+            overall_task = progress.add_task(
+                "[green]Processing recordings", 
+                total=len(matching_paths)
+            )
+            
+            # Process each matching path
+            for path_idx, raw_path in enumerate(matching_paths):
+                subject = raw_path.subject
+                
+                # Get pipeline steps for this recording's progress bar
+                pipeline_steps = self._get_pipeline_steps()
+                
+                # Create a task for the current recording's steps
+                recording_name = raw_path.basename
+                step_task = progress.add_task(
+                    f"[cyan]{recording_name}", 
+                    total=len(pipeline_steps)
+                )
+                
+                try:
+                    results = self._process_single_recording(raw_path, progress, step_task)
+                    all_results.setdefault(subject, []).append(results)
+                    logger.info(f"Successfully completed {recording_name}")
+                except Exception as exc:
+                    # Do not stop the whole batch if one subject fails; capture the error
+                    logger.error(f"Error processing {recording_name}: {str(exc)}")
+                    all_results.setdefault(subject, []).append({'error': str(exc)})
+                finally:
+                    # Remove the step task after this recording is done
+                    progress.remove_task(step_task)
+                
+                # Update overall progress
+                progress.update(overall_task, completed=path_idx + 1)
 
+        logger.info(f"Pipeline completed. Processed {len(matching_paths)} recording(s)")
         return all_results
