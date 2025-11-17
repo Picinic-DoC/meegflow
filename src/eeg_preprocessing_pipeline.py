@@ -404,8 +404,6 @@ class EEGPreprocessingPipeline:
             data['epochs'], picks, reject, n_epochs_bad_ch
         )
 
-        bad_chs = list([data['epochs'].ch_names[i] for i in [2,3,10]])
-
         if bad_chs:
             for instance_to_apply in apply_on:
                 data[instance_to_apply].info['bads'].extend([ch for ch in bad_chs if ch not in data[instance_to_apply].info['bads']])
