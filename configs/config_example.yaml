@@ -5,13 +5,7 @@ pipeline:
     h_freq: 40.0
   - name: reference
     ref_channels: average
-    projection: false
-  - name: ica
-    n_components: 20
-    method: fastica
-    find_eog: true
-    find_ecg: false
-    apply: true
+    instance: 'raw'
   - name: find_events
     shortest_event: 1
   - name: epoch

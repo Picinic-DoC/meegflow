@@ -48,6 +48,12 @@ def _parse_args():
         help='Run number(s) to process.'
     )
     parser.add_argument(
+        '--extensions',
+        nargs='+',
+        required=False,
+        help='File extension(s) to process.'
+    )
+    parser.add_argument(
         '--processings',
         nargs='+',
         required=False,
@@ -110,6 +116,7 @@ def main():
         tasks=args.tasks,
         acquisitions=args.acquisitions,
         runs=args.runs,
+        extensions=args.extensions,
         processings=args.processings,
         recordings=args.recordings,
         spaces=args.spaces,

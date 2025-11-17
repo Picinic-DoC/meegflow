@@ -10,6 +10,7 @@ from typing import Iterable, Union, Dict, Any, List
 import json
 import mne
 from mne.utils import logger
+import numpy as np
 from mne_bids import BIDSPath, read_raw_bids, find_matching_paths
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 import adaptive_reject
@@ -170,8 +171,6 @@ class EEGPreprocessingPipeline:
 
         ref_channels = step_config.get('ref_channels', 'average')
         instance = step_config.get('instance', 'epochs')
-        projection = step_config.get('projection', True)
-        apply = step_config.get('apply', True)
 
         if instance not in data:
             raise ValueError(f"reference step requires '{instance}' to be present in data (either 'raw' or 'epochs')")
@@ -179,15 +178,11 @@ class EEGPreprocessingPipeline:
         mne.set_eeg_reference(
             inst=data[instance],
             ref_channels=ref_channels,
-            projection=projection,
-            apply=apply,
         )
 
         data['preprocessing_steps'].append({
             'step': 'reference',
-            'ref_channels': ref_channels,
-            'projection': projection,
-            'apply': apply
+            'ref_channels': ref_channels
         })
 
         return data
@@ -255,7 +250,16 @@ class EEGPreprocessingPipeline:
             raise ValueError("find_events requires 'raw' in data")
 
         shortest_event = step_config.get('shortest_event', 1)
-        events = mne.find_events(data['raw'], shortest_event=shortest_event)
+        try:
+            # First attempt: use stim channel(s)
+            events = mne.find_events(data['raw'], shortest_event=shortest_event)
+        except ValueError as e:
+            # If no stim channel found → fallback to annotations
+            if "No stim channels found" in str(e):
+                events, event_id = mne.events_from_annotations(data['raw'], event_id='auto')
+            else:
+                # re-raise if it's some other error
+                raise
         data['events'] = events
 
         data['preprocessing_steps'].append({
@@ -532,8 +536,18 @@ class EEGPreprocessingPipeline:
         # Ensure directory exists
         bids_path.mkdir(exist_ok=True)
 
+        class NpEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, np.integer):
+                    return int(obj)
+                elif isinstance(obj, np.floating):
+                    return float(obj)
+                elif isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                return super().default(obj)
+
         with open(bids_path.fpath, 'w') as f:
-            json.dump(report, f, indent=2)
+            json.dump(report, f, indent=2, cls=NpEncoder)
 
         data['json_report'] = str(bids_path)
         return data
@@ -648,6 +662,7 @@ class EEGPreprocessingPipeline:
         tasks: Union[str, List[str]] = None,
         acquisitions: Union[str, List[str]] = None,
         runs: Union[str, List[str]] = None,
+        extensions: Union[str, List[str]] = None,
         processings: Union[str, List[str]] = None,
         recordings: Union[str, List[str]] = None,
         spaces: Union[str, List[str]] = None,
@@ -668,6 +683,8 @@ class EEGPreprocessingPipeline:
             Acquisition parameter(s). None matches all acquisitions.
         runs : str | list of str | None
             Run number(s). None matches all runs.
+        extensions : str | list of str | None
+            File extension(s). None matches all extensions.
         processings : str | list of str | None
             Processing label(s). None matches all processings.
         recordings : str | list of str | None
@@ -693,6 +710,7 @@ class EEGPreprocessingPipeline:
             tasks=tasks,
             acquisitions=acquisitions,
             runs=runs,
+            extensions=extensions,
             processings=processings,
             recordings=recordings,
             spaces=spaces,
