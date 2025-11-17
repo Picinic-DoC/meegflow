@@ -1,4 +1,7 @@
 pipeline:
+  - name: set_montage
+    montage: standard_1020
+
   - name: load_data
   
   - name: bandpass_filter

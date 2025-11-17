@@ -23,6 +23,7 @@ class EEGPreprocessingPipeline:
 
         # Map step names to their corresponding methods
         self.step_functions = {
+            'set_montage': self._step_set_montage,
             'load_data': self._step_load_data,
             'bandpass_filter': self._step_bandpass_filter,
             'notch_filter': self._step_notch_filter,
@@ -79,6 +80,21 @@ class EEGPreprocessingPipeline:
             eog=False,
             meg=False
         )
+
+    def _step_set_montage(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        if 'raw' not in data:
+            raise ValueError("set_montage requires 'raw' in data")
+
+        montage_name = step_config.get('montage', 'standard_1020')
+
+        montage = mne.channels.make_standard_montage(montage_name)
+        data['raw'].set_montage(montage, on_missing="ignore")
+
+        data['preprocessing_steps'].append({
+            'step': 'set_montage',
+            'montage': montage_name
+        })
+        return data
 
     def _step_load_data(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Load raw data into memory."""
@@ -372,11 +388,9 @@ class EEGPreprocessingPipeline:
             raise ValueError("find_bads_channels_threshold requires 'epochs' in data")
 
         picks_params = step_config.get('picks', None)
-        reject = step_config.get('reject', {'eeg': 150e-6})
+        reject = step_config.get('reject', {'eeg': 100e-6})
         n_epochs_bad_ch = step_config.get('n_epochs_bad_ch', 0.5)
         apply_on = step_config.get('apply_on', ['epochs'])
-
-        print('REJECT:', reject)
 
         if not isinstance(apply_on, list):
             apply_on = [apply_on]
@@ -389,6 +403,8 @@ class EEGPreprocessingPipeline:
         bad_chs = adaptive_reject.find_bads_channels_threshold(
             data['epochs'], picks, reject, n_epochs_bad_ch
         )
+
+        bad_chs = list([data['epochs'].ch_names[i] for i in [2,3,10]])
 
         if bad_chs:
             for instance_to_apply in apply_on:
@@ -496,7 +512,7 @@ class EEGPreprocessingPipeline:
             raise ValueError("find_bads_epochs_threshold requires 'epochs' in data")
 
         picks_params = step_config.get('picks', None)
-        reject = step_config.get('reject', {'eeg': 150e-6})
+        reject = step_config.get('reject', {'eeg': 100e-6})
         n_channels_bad_epoch = step_config.get('n_channels_bad_epoch', 0.1)
 
         picks = self._get_picks(data['epochs'].info, picks_params)
