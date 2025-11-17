@@ -30,6 +30,11 @@ cd nice-preprocessing
 pip install -r requirements.txt
 ```
 
+3. (Optional) Install the package to use the `eeg-preprocess` command:
+```bash
+pip install -e .
+```
+
 ## Usage
 
 ### Process Multiple Subjects
@@ -37,17 +42,27 @@ pip install -r requirements.txt
 Run the preprocessing pipeline on multiple subjects:
 
 ```bash
-python -m cli \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 03 \
     --tasks rest \
-    --config config_example.yaml
+    --config configs/config_example.yaml
+```
+
+If you installed the package with `pip install -e .`, you can use the `eeg-preprocess` command:
+
+```bash
+eeg-preprocess \
+    --bids-root /path/to/bids/dataset \
+    --subjects 01 02 03 \
+    --tasks rest \
+    --config configs/config_example.yaml
 ```
 
 Process all subjects with a specific task:
 
 ```bash
-eeg-preprocess \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --tasks rest
 ```
@@ -55,7 +70,7 @@ eeg-preprocess \
 Process specific subjects with multiple tasks:
 
 ```bash
-python eeg_preprocessing_pipeline.py \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 \
     --tasks rest task1 task2
@@ -99,7 +114,11 @@ The pipeline creates outputs in a BIDS-derivatives structure:
 
 ```
 derivatives/nice_preprocessing/
-├── epochs/
+├── epochs/              # When saving epochs with save_clean_instance
+│   └── sub-01/
+│       └── eeg/
+│           └── sub-01_task-rest_proc-clean_desc-cleaned_epo.fif
+├── raw/                 # When saving raw data with save_clean_instance
 │   └── sub-01/
 │       └── eeg/
 │           └── sub-01_task-rest_proc-clean_desc-cleaned_epo.fif
@@ -383,19 +402,19 @@ The pipeline processes multiple subjects and files sequentially. You can process
 
 ```bash
 # Process specific subjects with a specific task
-python eeg_preprocessing_pipeline.py \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 03 04 05 \
     --tasks rest \
-    --config config_example.yaml
+    --config configs/config_example.yaml
 
 # Process all subjects in the dataset
-python eeg_preprocessing_pipeline.py \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
-    --config config_example.yaml
+    --config configs/config_example.yaml
 
 # Process specific sessions for specific subjects
-python eeg_preprocessing_pipeline.py \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 \
     --sessions 01 02 \
@@ -426,14 +445,14 @@ The pipeline uses MNE's logger for all output messages. You can:
 
 **Console Output (default)**:
 ```bash
-python -m cli \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02
 ```
 
 **Log to File**:
 ```bash
-python -m cli \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 \
     --log-file /path/to/logs/pipeline.log
@@ -441,7 +460,7 @@ python -m cli \
 
 **Adjust Logging Level**:
 ```bash
-python -m cli \
+python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 \
     --log-level DEBUG
