@@ -7,6 +7,8 @@ A modular, configuration-driven EEG preprocessing pipeline using MNE-BIDS. The p
 - **MNE-BIDS Integration**: Seamlessly reads EEG data in BIDS format
 - **Modular Design**: Each preprocessing step is a separate function
 - **Configuration-Driven**: Choose steps, their order, and parameters via YAML
+- **Progress Tracking**: Rich progress bars show real-time progress for recordings and preprocessing steps
+- **Comprehensive Logging**: MNE logger integration with optional log file output
 - **Multiple Output Formats**:
   - Clean preprocessed epochs in `.fif` format
   - Clean preprocessed raw data in `.fif` format
@@ -258,6 +260,8 @@ These arguments use the same matching logic as `mne-bids` `find_matching_paths`.
 ### Other Arguments
 - `--output-root`: Custom output path (optional, defaults to `bids-root/derivatives/nice-preprocessing`)
 - `--config`: Path to YAML configuration file (optional)
+- `--log-file`: Path to log file (optional, defaults to console output)
+- `--log-level`: Logging level - DEBUG, INFO, WARNING, or ERROR (optional, default: INFO)
 
 ## Preprocessing Steps Details
 
@@ -377,6 +381,53 @@ python eeg_preprocessing_pipeline.py \
 
 For HPC/cluster environments, you can create your own SLURM or other batch submission scripts that call the pipeline with subject lists.
 
+## Progress Tracking and Logging
+
+The pipeline includes comprehensive progress tracking and logging features:
+
+### Progress Bars
+
+When running the pipeline, you'll see two levels of progress bars:
+1. **Overall progress**: Shows progress across all recordings being processed
+2. **Step progress**: Shows progress through preprocessing steps for each recording
+
+The progress bars use the `rich` library and display:
+- Spinner animation
+- Progress bar with percentage
+- Time remaining estimate
+- Current step being executed
+
+### Logging
+
+The pipeline uses MNE's logger for all output messages. You can:
+
+**Console Output (default)**:
+```bash
+python -m cli \
+    --bids-root /path/to/bids/dataset \
+    --subjects 01 02
+```
+
+**Log to File**:
+```bash
+python -m cli \
+    --bids-root /path/to/bids/dataset \
+    --subjects 01 02 \
+    --log-file /path/to/logs/pipeline.log
+```
+
+**Adjust Logging Level**:
+```bash
+python -m cli \
+    --bids-root /path/to/bids/dataset \
+    --subjects 01 02 \
+    --log-level DEBUG
+```
+
+Available log levels: `DEBUG`, `INFO` (default), `WARNING`, `ERROR`
+
+The pipeline also saves a summary of results to `derivatives/nice_preprocessing/pipeline_results.json` for easy programmatic access.
+
 ## Requirements
 
 - Python >= 3.8
@@ -384,6 +435,7 @@ For HPC/cluster environments, you can create your own SLURM or other batch submi
 - mne-bids >= 0.14
 - numpy >= 1.24.0
 - scipy >= 1.11.0
+- rich >= 13.0.0
 - matplotlib >= 3.7.0 (recommended)
 - pandas >= 2.0.0 (recommended)
 
