@@ -618,8 +618,209 @@ class EEGPreprocessingPipeline:
 
     def _step_generate_html_report(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Generate HTML reports."""
+        import matplotlib.pyplot as plt
+        from io import BytesIO
+        import base64
 
         html_report = mne.Report(title=f'Preprocessing Report - Subject {data["subject"]}')
+
+        # Add bad channels topoplot section
+        try:
+            # Try to get info from either epochs or raw
+            info = None
+            if 'epochs' in data and data['epochs'] is not None:
+                info = data['epochs'].info
+            elif 'raw' in data and data['raw'] is not None:
+                info = data['raw'].info
+            
+            if info is not None and len(info['bads']) > 0:
+                # Create topoplot showing bad channels
+                fig, ax = plt.subplots(figsize=(8, 6))
+                
+                # Get all EEG channel positions
+                eeg_picks = mne.pick_types(info, eeg=True, exclude=[])
+                pos = np.array([info['chs'][i]['loc'][:3] for i in eeg_picks])
+                
+                # Check if we have valid positions
+                if pos.shape[0] > 0 and not np.all(pos == 0):
+                    # Get channel names
+                    ch_names = [info['ch_names'][i] for i in eeg_picks]
+                    
+                    # Create data array (all zeros for white background)
+                    data_to_plot = np.zeros(len(eeg_picks))
+                    
+                    # Create mask for bad channels
+                    mask = np.array([ch in info['bads'] for ch in ch_names])
+                    
+                    # Plot topomap with white background
+                    from mne.viz import plot_topomap
+                    im, cn = plot_topomap(
+                        data_to_plot, 
+                        info,
+                        axes=ax,
+                        show=False,
+                        cmap='Greys',
+                        vlim=(0, 0.1),
+                        mask=mask,
+                        mask_params=dict(
+                            marker='x',
+                            markerfacecolor='red',
+                            markeredgecolor='red',
+                            linewidth=0,
+                            markersize=15
+                        ),
+                        sensors=True,
+                        contours=0
+                    )
+                    
+                    ax.set_title(f'Bad Channels (n={len(info["bads"])})', fontsize=14, fontweight='bold')
+                    
+                    # Add text listing bad channels
+                    bad_channels_text = ', '.join(info['bads'])
+                    fig.text(0.5, 0.05, f'Bad channels: {bad_channels_text}', 
+                            ha='center', fontsize=10, wrap=True)
+                    
+                    plt.tight_layout()
+                    
+                    # Add to report
+                    html_report.add_figure(
+                        fig=fig,
+                        title='Bad Channels',
+                        caption=f'Topoplot showing {len(info["bads"])} bad channels marked with red crosses'
+                    )
+                    plt.close(fig)
+        except Exception as e:
+            # If adding bad channels topoplot fails, continue without stopping the pipeline
+            logger.warning(f"Failed to add bad channels topoplot: {e}")
+            pass
+
+        # Add preprocessing steps table section
+        try:
+            if 'preprocessing_steps' in data and len(data['preprocessing_steps']) > 0:
+                # Create HTML table with collapsible rows
+                html_content = """
+                <style>
+                    .steps-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin: 20px 0;
+                        font-family: Arial, sans-serif;
+                    }
+                    .steps-table th, .steps-table td {
+                        border: 1px solid #ddd;
+                        padding: 12px;
+                        text-align: left;
+                    }
+                    .steps-table th {
+                        background-color: #4CAF50;
+                        color: white;
+                        font-weight: bold;
+                    }
+                    .steps-table tr:nth-child(even) {
+                        background-color: #f9f9f9;
+                    }
+                    .step-header {
+                        cursor: pointer;
+                        background-color: #f2f2f2;
+                        font-weight: bold;
+                        user-select: none;
+                    }
+                    .step-header:hover {
+                        background-color: #e0e0e0;
+                    }
+                    .step-details {
+                        display: none;
+                        padding: 15px;
+                        background-color: #fafafa;
+                        border-left: 3px solid #4CAF50;
+                    }
+                    .step-details.active {
+                        display: block;
+                    }
+                    .step-details pre {
+                        background-color: #f4f4f4;
+                        padding: 10px;
+                        border-radius: 4px;
+                        overflow-x: auto;
+                    }
+                    .toggle-icon {
+                        float: right;
+                        font-weight: bold;
+                    }
+                </style>
+                <script>
+                    function toggleStep(stepId) {
+                        var details = document.getElementById('details-' + stepId);
+                        var icon = document.getElementById('icon-' + stepId);
+                        if (details.classList.contains('active')) {
+                            details.classList.remove('active');
+                            icon.textContent = '▼';
+                        } else {
+                            details.classList.add('active');
+                            icon.textContent = '▲';
+                        }
+                    }
+                </script>
+                <h2>Preprocessing Steps</h2>
+                <table class="steps-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px;">#</th>
+                            <th>Step Name</th>
+                            <th style="width: 120px;">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                """
+                
+                for idx, step in enumerate(data['preprocessing_steps'], 1):
+                    step_name = step.get('step', 'Unknown')
+                    step_id = f"step-{idx}"
+                    
+                    # Create header row
+                    html_content += f"""
+                        <tr class="step-header" onclick="toggleStep('{step_id}')">
+                            <td>{idx}</td>
+                            <td>{step_name}</td>
+                            <td><span class="toggle-icon" id="icon-{step_id}">▼</span> Click to expand</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3" style="padding: 0;">
+                                <div class="step-details" id="details-{step_id}">
+                    """
+                    
+                    # Add step parameters
+                    html_content += "<h3>Parameters:</h3><pre>"
+                    for key, value in step.items():
+                        if key != 'step':
+                            # Format the value nicely
+                            if isinstance(value, (list, dict)):
+                                value_str = json.dumps(value, indent=2)
+                            else:
+                                value_str = str(value)
+                            html_content += f"{key}: {value_str}\n"
+                    html_content += "</pre>"
+                    
+                    html_content += """
+                                </div>
+                            </td>
+                        </tr>
+                    """
+                
+                html_content += """
+                    </tbody>
+                </table>
+                """
+                
+                # Add the HTML table to the report
+                html_report.add_html(
+                    html=html_content,
+                    title='Preprocessing Steps',
+                )
+        except Exception as e:
+            # If adding preprocessing steps table fails, continue without stopping the pipeline
+            logger.warning(f"Failed to add preprocessing steps table: {e}")
+            pass
 
         if 'ica' in data:
             try:
