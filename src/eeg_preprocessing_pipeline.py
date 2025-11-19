@@ -25,6 +25,7 @@ class EEGPreprocessingPipeline:
         self.step_functions = {
             'set_montage': self._step_set_montage,
             'load_data': self._step_load_data,
+            'drop_unused_channels': self._step_drop_unused_channels,
             'bandpass_filter': self._step_bandpass_filter,
             'notch_filter': self._step_notch_filter,
             'resample': self._step_resample,
@@ -100,6 +101,24 @@ class EEGPreprocessingPipeline:
         """Load raw data into memory."""
         if 'raw' in data:
             data['raw'].load_data()
+        return data
+
+    def _step_drop_unused_channels(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Drop unused channels from the data."""
+        channels_to_drop = step_config.get('channels_to_drop', [])
+        instance = step_config.get('instance', 'raw') 
+
+        if instance not in data:
+            raise ValueError(f"drop_unused_channels step requires '{instance}' to be present in data (either 'raw' or 'epochs')")
+
+        data[instance].drop_channels(channels_to_drop)
+
+        data['preprocessing_steps'].append({
+            'step': 'drop_unused_channels',
+            'instance': instance,
+            'channels_dropped': channels_to_drop
+        })
+
         return data
 
     def _step_bandpass_filter(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
