@@ -48,40 +48,10 @@ def _parse_args():
         help='Run number(s) to process.'
     )
     parser.add_argument(
-        '--extensions',
-        nargs='+',
-        required=False,
-        help='File extension(s) to process.'
-    )
-    parser.add_argument(
-        '--processings',
-        nargs='+',
-        required=False,
-        help='Processing label(s) to process.'
-    )
-    parser.add_argument(
-        '--recordings',
-        nargs='+',
-        required=False,
-        help='Recording name(s) to process.'
-    )
-    parser.add_argument(
-        '--spaces',
-        nargs='+',
-        required=False,
-        help='Coordinate space(s) to process.'
-    )
-    parser.add_argument(
-        '--splits',
-        nargs='+',
-        required=False,
-        help='Split(s) of continuous recording to process.'
-    )
-    parser.add_argument(
-        '--descriptions',
-        nargs='+',
-        required=False,
-        help='Description(s) to process.'
+        '--extension',
+        type=str,
+        default='.vhdr',
+        help='File extension to process.'
     )
     parser.add_argument('--config', required=False, help='Path to YAML config file with preprocessing parameters.')
     parser.add_argument('--log-file', required=False, help='Path to log file. If not specified, logs will be printed to console.')
@@ -109,19 +79,18 @@ def main():
     if args.output_root:
         logger.info(f"Output root: {args.output_root}")
     
+    # print all arguments
+    logger.info("Pipeline parameters:")
+    for arg, value in vars(args).items():
+        logger.info(f"  {arg}: {value}")
+    
     pipeline = EEGPreprocessingPipeline(bids_root=args.bids_root, output_root=args.output_root, config=config)
     results = pipeline.run_pipeline(
         subjects=args.subjects,
         sessions=args.sessions,
         tasks=args.tasks,
         acquisitions=args.acquisitions,
-        runs=args.runs,
-        extensions=args.extensions,
-        processings=args.processings,
-        recordings=args.recordings,
-        spaces=args.spaces,
-        splits=args.splits,
-        descriptions=args.descriptions,
+        extension=args.extension,
     )
 
     # Log summary of results

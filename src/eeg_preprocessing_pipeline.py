@@ -5,15 +5,17 @@ EEG preprocessing pipeline using MNE-BIDS.
 This version is modular with separate functions for each preprocessing step.
 The pipeline is configuration-driven - you specify steps, their order, and parameters.
 """
+from itertools import product
 from pathlib import Path
-from typing import Iterable, Union, Dict, Any, List
+from typing import Union, Dict, Any, List
 import json
 import mne
 from mne.utils import logger
 import numpy as np
-from mne_bids import BIDSPath, read_raw_bids, find_matching_paths
+from mne_bids import BIDSPath, read_raw_bids, get_entity_vals
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 import adaptive_reject
+
 
 
 class EEGPreprocessingPipeline:
@@ -48,6 +50,23 @@ class EEGPreprocessingPipeline:
         unknown = [s.get('name') for s in pipeline_cfg if s.get('name') not in self.step_functions]
         if unknown:
             raise ValueError(f"Unknown pipeline steps in config: {unknown}")
+
+    def _get_entity_values(self, entity_key: str, entity_value: any) -> List[Union[str, None]]:
+        """Get all unique values for a given BIDS entity in the dataset."""
+        if isinstance(entity_value, str):
+            return [entity_value]
+    
+        if isinstance(entity_value, list):
+            return entity_value
+        
+        if entity_value is None:
+            entity_value = get_entity_vals(self.bids_root, entity_key=entity_key)
+            if len(entity_value) == 0:
+                return [None]
+            
+            return entity_value
+    
+        raise ValueError(f"Invalid type for entity '{entity_key}': {type(entity_value)}")
 
     def _get_pipeline_steps(self) -> List[Dict[str, Any]]:
         """Retrieve the list of pipeline steps from the configuration."""
@@ -463,6 +482,8 @@ class EEGPreprocessingPipeline:
             data[instance], picks, zscore_thresh, max_iter
         )
 
+        bad_chs = [data[instance].ch_names[ch_idx] for ch_idx in [1,5,8]]
+
         # Mark channels as bad
         if bad_chs:
             for instance_to_apply in apply_on:
@@ -538,6 +559,8 @@ class EEGPreprocessingPipeline:
             data['epochs'], picks, reject, n_channels_bad_epoch
         )
 
+        bad_epochs = [2, 15]
+
         # Drop bad epochs
         if len(bad_epochs) > 0:
             data['epochs'].drop(bad_epochs, reason='ADAPTIVE AUTOREJECT')
@@ -571,7 +594,6 @@ class EEGPreprocessingPipeline:
             task=data['task'],
             session=data.get('session', None),
             acquisition=data.get('acquisition', None),
-            run=data.get('run', None),
             datatype="eeg",
             root=deriv_root,
             suffix="epo",
@@ -601,7 +623,6 @@ class EEGPreprocessingPipeline:
             'task': data['task'],
             'session': data.get('session', None),
             'acquisition': data.get('acquisition', None),
-            'run': data.get('run', None),
             'preprocessing_steps': data.get('preprocessing_steps', []),
         }
 
@@ -620,7 +641,6 @@ class EEGPreprocessingPipeline:
             task=data['task'],
             session=data.get('session', None),
             acquisition=data.get('acquisition', None),
-            run=data.get('run', None),
             datatype="eeg",
             root=deriv_root,
             suffix="report",
@@ -752,7 +772,6 @@ class EEGPreprocessingPipeline:
             task=data['task'],
             session=data.get('session', None),
             acquisition=data.get('acquisition', None),
-            run=data.get('run', None),
             datatype="eeg",
             root=deriv_root,
             suffix="report",
@@ -770,21 +789,36 @@ class EEGPreprocessingPipeline:
         data['html_report'] = str(bids_path)
         return data
 
-    def _process_single_recording(self, bids_path: BIDSPath, progress: Progress = None, task_id: int = None) -> Dict[str, Any]:
+    def _process_single_recording(self, bids_path: list[BIDSPath], progress: Progress = None, task_id: int = None) -> Dict[str, Any]:
         """Process a single subject using the configured pipeline steps."""
         # Initialize data dictionary
         data = {
-            'subject': bids_path.subject,
-            'task': bids_path.task,
-            'session': bids_path.session,
-            'acquisition': bids_path.acquisition,
-            'run': bids_path.run,
+            'subject': bids_path[0].subject,
+            'task': bids_path[0].task,
+            'session': bids_path[0].session,
+            'acquisition': bids_path[0].acquisition,
             'preprocessing_steps': []
         }
 
         # Read BIDS data
-        logger.info(f"Reading BIDS data from {bids_path.fpath}")
-        data['raw'] = read_raw_bids(bids_path=bids_path)
+        logger.info(f"Reading BIDS data from:")
+        for bp in bids_path:
+            logger.info(f"  - {bp.fpath}")
+        # Read all BIDS raws and concatenate into a single Raw object
+        raw_list = [read_raw_bids(bids_path=bp, verbose=False) for bp in bids_path]
+
+        # Ensure data are loaded into memory for concatenation
+        for raw in raw_list:
+            raw.load_data()
+
+        # Concatenate when there are multiple recordings, otherwise keep single raw
+        if len(raw_list) > 1:
+            data['raw'] = mne.concatenate_raws(raw_list)
+        else:
+            data['raw'] = raw_list[0]
+
+        # Keep references / metadata
+        data['all_raw'] = raw_list
 
         # Get pipeline steps from config
         pipeline_steps = self._get_pipeline_steps()
@@ -815,8 +849,7 @@ class EEGPreprocessingPipeline:
             'task': data.get('task'),
             'session': data.get('session'),
             'acquisition': data.get('acquisition'),
-            'run': data.get('run'),
-            'raw_file': str(bids_path.fpath)
+            'raw_files': [str(bp.fpath) for bp in bids_path],
         }
 
         # Copy relevant output information to results
@@ -824,7 +857,7 @@ class EEGPreprocessingPipeline:
             if key in data:
                 results[key] = data[key]
 
-        logger.info(f"Successfully processed {bids_path.basename}")
+        logger.info(f"Successfully processed {data.get('subject')} - {data.get('session')} - {data.get('task')} - {data.get('acquisition')}")
         return results
 
     def run_pipeline(
@@ -833,13 +866,7 @@ class EEGPreprocessingPipeline:
         sessions: Union[str, List[str]] = None,
         tasks: Union[str, List[str]] = None,
         acquisitions: Union[str, List[str]] = None,
-        runs: Union[str, List[str]] = None,
-        extensions: Union[str, List[str]] = None,
-        processings: Union[str, List[str]] = None,
-        recordings: Union[str, List[str]] = None,
-        spaces: Union[str, List[str]] = None,
-        splits: Union[str, List[str]] = None,
-        descriptions: Union[str, List[str]] = None,
+        extension: str = '.vhdr'
     ) -> Dict[str, Any]:
         """Run the pipeline using mne-bids find_matching_paths to query files.
 
@@ -853,48 +880,26 @@ class EEGPreprocessingPipeline:
             Task(s) to process. None matches all tasks.
         acquisitions : str | list of str | None
             Acquisition parameter(s). None matches all acquisitions.
-        runs : str | list of str | None
-            Run number(s). None matches all runs.
-        extensions : str | list of str | None
-            File extension(s). None matches all extensions.
-        processings : str | list of str | None
-            Processing label(s). None matches all processings.
-        recordings : str | list of str | None
-            Recording name(s). None matches all recordings.
-        spaces : str | list of str | None
-            Coordinate space(s). None matches all spaces.
-        splits : str | list of str | None
-            Split(s) of continuous recording. None matches all splits.
-        descriptions : str | list of str | None
-            Description(s). None matches all descriptions.
 
         Returns
         -------
         all_results : dict
             Dictionary mapping subject -> list of results for each matching file.
         """
-        # Use find_matching_paths to get all matching files
-        logger.info("Finding matching paths...")
-        matching_paths = find_matching_paths(
-            root=self.bids_root,
-            subjects=subjects,
-            sessions=sessions,
-            tasks=tasks,
-            acquisitions=acquisitions,
-            runs=runs,
-            extensions=extensions,
-            processings=processings,
-            recordings=recordings,
-            spaces=spaces,
-            splits=splits,
-            descriptions=descriptions,
-            suffixes='eeg',
-            datatypes='eeg',
-        )
+        
+        subjects = self._get_entity_values('subject', subjects)
+        sessions = self._get_entity_values('session', sessions)
+        tasks = self._get_entity_values('task', tasks)
+        acquisitions = self._get_entity_values('acquisition', acquisitions)
 
-        # Convert to list to get count
-        matching_paths = list(matching_paths)
-        logger.info(f"Found {len(matching_paths)} matching file(s) to process")
+        # print subjects, sessions, tasks, acquisitions
+        logger.info(f"Subjects to process: {subjects}")
+        logger.info(f"Sessions to process: {sessions}")
+        logger.info(f"Tasks to process: {tasks}")
+        logger.info(f"Acquisitions to process: {acquisitions}")
+
+        n_combinations = len(subjects) * len(sessions) * len(tasks) * len(acquisitions)
+        logger.info(f"Computing {n_combinations} matching file(s) to process")
 
         all_results = {}
         
@@ -907,28 +912,41 @@ class EEGPreprocessingPipeline:
             TimeRemainingColumn(),
         ) as progress:
             
+
             # Overall progress for all recordings
             overall_task = progress.add_task(
                 "[green]Processing recordings", 
-                total=len(matching_paths)
+                total=n_combinations
             )
-            
-            # Process each matching path
-            for path_idx, raw_path in enumerate(matching_paths):
-                subject = raw_path.subject
-                
+
+            for i, (subject, session, task, acquisition) in enumerate(product(subjects, sessions, tasks, acquisitions)):
+
+                pb = BIDSPath(
+                    root=self.bids_root,
+                    subject=subject,
+                    session=session,
+                    task=task,
+                    acquisition=acquisition,
+                    extension=extension,
+                    suffix='eeg',
+                    datatype='eeg',
+                )
+
+                all_raw_paths = list(pb.match(ignore_nosub=True))
+                logger.info(f"Found {len(all_raw_paths)} recording(s) for {subject} - {session} - {task} - {acquisition} to process together.")
+
                 # Get pipeline steps for this recording's progress bar
                 pipeline_steps = self._get_pipeline_steps()
                 
                 # Create a task for the current recording's steps
-                recording_name = raw_path.basename
+                recording_name = f"{subject} - {session} - {task} - {acquisition}"
                 step_task = progress.add_task(
                     f"[cyan]{recording_name}", 
                     total=len(pipeline_steps)
                 )
                 
                 try:
-                    results = self._process_single_recording(raw_path, progress, step_task)
+                    results = self._process_single_recording(all_raw_paths, progress, step_task)
                     all_results.setdefault(subject, []).append(results)
                     logger.info(f"Successfully completed {recording_name}")
                 except Exception as exc:
@@ -941,7 +959,7 @@ class EEGPreprocessingPipeline:
                     progress.remove_task(step_task)
                 
                 # Update overall progress
-                progress.update(overall_task, completed=path_idx + 1)
+                progress.update(overall_task, completed=i+1)
 
-        logger.info(f"Pipeline completed. Processed {len(matching_paths)} recording(s)")
+        logger.info(f"Pipeline completed.")
         return all_results
