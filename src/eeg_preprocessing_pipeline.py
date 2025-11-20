@@ -12,9 +12,10 @@ import json
 import mne
 from mne.utils import logger
 import numpy as np
-from mne_bids import BIDSPath, read_raw_bids, get_entity_vals
+from mne_bids import BIDSPath, read_raw_bids
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 import adaptive_reject
+from collections import defaultdict
 
 
 
@@ -25,8 +26,9 @@ class EEGPreprocessingPipeline:
 
         # Map step names to their corresponding methods
         self.step_functions = {
+            'strip_recording': self._step_strip_recording,
+            'concatenate_recordings': self._step_concatenate_recordings,
             'set_montage': self._step_set_montage,
-            'load_data': self._step_load_data,
             'drop_unused_channels': self._step_drop_unused_channels,
             'bandpass_filter': self._step_bandpass_filter,
             'notch_filter': self._step_notch_filter,
@@ -36,6 +38,8 @@ class EEGPreprocessingPipeline:
             'ica': self._step_ica,
             'find_events': self._step_find_events,
             'epoch': self._step_epoch,
+            'chunk_in_epoch': self._step_chunk_in_epoch,
+            'find_flat_channels': self._step_find_flat_channels,
             'find_bads_channels_threshold': self._step_find_bads_channels_threshold,
             'find_bads_channels_variance': self._step_find_bads_channels_variance,
             'find_bads_channels_high_frequency': self._step_find_bads_channels_high_frequency,
@@ -59,14 +63,25 @@ class EEGPreprocessingPipeline:
         if isinstance(entity_value, list):
             return entity_value
         
+        # TODO: restore get_entity_vals and think how to improve the acq and other parameters that may be usefull to group but not mandatory
         if entity_value is None:
-            entity_value = get_entity_vals(self.bids_root, entity_key=entity_key)
-            if len(entity_value) == 0:
-                return [None]
-            
-            return entity_value
+            return [None]
     
         raise ValueError(f"Invalid type for entity '{entity_key}': {type(entity_value)}")
+
+    def _find_events_from_raw(self, raw, shortest_event=1, event_id='auto'):
+        try:
+            # First attempt: use stim channel(s)
+            events = mne.find_events(raw, shortest_event=shortest_event)
+        except ValueError as e:
+            # If no stim channel found → fallback to annotations
+            if "No stim channels found" in str(e):
+                events, event_id = mne.events_from_annotations(raw, event_id=event_id)
+            else:
+                # re-raise if it's some other error
+                raise
+
+        return events
 
     def _get_pipeline_steps(self) -> List[Dict[str, Any]]:
         """Retrieve the list of pipeline steps from the configuration."""
@@ -101,6 +116,58 @@ class EEGPreprocessingPipeline:
             meg=False
         )
 
+    def _step_strip_recording(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        
+        instance = step_config.get('instance', 'raw')
+        start_padding = step_config.get('start_padding', 1)
+        end_padding = step_config.get('end_padding', 1)
+        shortest_event = step_config.get('shortest_event', 1)
+        event_id = step_config.get('event_id', 'auto')
+        
+
+        if instance not in data:
+            raise ValueError(f"strip recordings step requires '{instance}' to be present in data (either 'all_raw', 'raw')")
+
+        # TODO: improve this and make it general to all corresponding steps        
+        all_instances = data[instance]
+        if not isinstance(all_instances, list):
+            all_instances = [all_instances]
+
+        for i, inst in enumerate(all_instances):
+            events = self._find_events_from_raw(inst, shortest_event=shortest_event, event_id=event_id)
+            
+            start = inst.times[events[0,0]] - start_padding
+            end = inst.times[events[-1,0]] + end_padding
+
+            start = max(0, start)
+            end = min(inst.times[-1], end)
+            
+            inst.crop(start, end)
+            
+            data['preprocessing_steps'].append({
+                'step': 'strip_recording',
+                'instance': f'{instance}-{i}',
+                'start': start,
+                'end': end
+            })
+        
+        return data
+    
+    def _step_concatenate_recordings(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        if 'all_raw' not in data:
+            raise ValueError("notch_filter requires 'all_raw' in data")
+
+        if len(data['all_raw']) > 1:
+            data['raw'] = mne.concatenate_raws(data['all_raw'])
+        else:
+            data['raw'] = data['all_raw'][0]
+        
+        data['preprocessing_steps'].append({
+            'step': 'concatenate_recordings',
+        })
+        
+        return data
+
     def _step_set_montage(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         if 'raw' not in data:
             raise ValueError("set_montage requires 'raw' in data")
@@ -114,12 +181,6 @@ class EEGPreprocessingPipeline:
             'step': 'set_montage',
             'montage': montage_name
         })
-        return data
-
-    def _step_load_data(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Load raw data into memory."""
-        if 'raw' in data:
-            data['raw'].load_data()
         return data
 
     def _step_drop_unused_channels(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -324,13 +385,14 @@ class EEGPreprocessingPipeline:
         ica.fit(data['raw'], picks=picks)
 
         # Automatically find and exclude artifacts
-        excluded_components = []
-        if step_config.get('find_eog', True):
+        excluded_components = defaultdict(list)
+        if step_config.get('find_eog', False):
             try:
                 eog_indices, eog_scores = ica.find_bads_eog(data['raw'])
                 if eog_indices:
                     ica.exclude.extend(eog_indices)
-                    excluded_components.extend(['eog'] * len(eog_indices))
+                    for idx in eog_indices:
+                        excluded_components[idx].append('eog')
             except Exception:
                 # no EOG channels or detection failed
                 pass
@@ -340,9 +402,16 @@ class EEGPreprocessingPipeline:
                 ecg_indices, ecg_scores = ica.find_bads_ecg(data['raw'])
                 if ecg_indices:
                     ica.exclude.extend(ecg_indices)
-                    excluded_components.extend(['ecg'] * len(ecg_indices))
+                    for idx in ecg_indices:
+                        excluded_components[idx].append('ecg')
             except Exception:
                 pass
+        
+        if step_config.get('selected_indices', None):
+            selected_indices = step_config.get('selected_indices')
+            ica.exclude.extend(selected_indices)
+            for idx in selected_indices:
+                excluded_components[idx].append('selected')
 
         # Apply ICA to remove artifacts if requested
         if step_config.get('apply', True):
@@ -355,7 +424,8 @@ class EEGPreprocessingPipeline:
             'n_components': n_components,
             'method': method,
             'excluded_components': len(ica.exclude),
-            'component_types': excluded_components
+            'component_types': excluded_components,
+            'apply': step_config.get('apply', True),
         })
 
         return data
@@ -366,13 +436,16 @@ class EEGPreprocessingPipeline:
             raise ValueError("find_events requires 'raw' in data")
 
         shortest_event = step_config.get('shortest_event', 1)
+        event_id = step_config.get('event_id', 'auto')
+        
+        # TODO: make method a parameter instead of try and catch
         try:
             # First attempt: use stim channel(s)
             events = mne.find_events(data['raw'], shortest_event=shortest_event)
         except ValueError as e:
             # If no stim channel found → fallback to annotations
             if "No stim channels found" in str(e):
-                events, event_id = mne.events_from_annotations(data['raw'], event_id='auto')
+                events, event_id = mne.events_from_annotations(data['raw'], event_id=event_id)
             else:
                 # re-raise if it's some other error
                 raise
@@ -416,6 +489,51 @@ class EEGPreprocessingPipeline:
             'baseline': baseline,
             'reject': reject,
             'n_epochs': len(data['epochs'])
+        })
+
+        return data
+
+    def _step_chunk_in_epoch(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Create epochs from raw data."""
+        if data.get('raw', None) is None:
+            raise ValueError("epoch step requires 'raw' in data")
+
+        duration = step_config.get('duration', 1)
+
+        data['epochs'] = mne.make_fixed_length_epochs(data['raw'], duration=duration, preload=True)
+
+        data['preprocessing_steps'].append({
+            'step': 'epoch',
+            'type': 'fixed_length_epochs',
+            'duration': duration,
+        })
+
+        return data
+
+    def _step_find_flat_channels(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        if 'raw' not in data:
+            raise ValueError("bandpass_filter requires 'raw' in data")
+
+        picks_params = step_config.get('picks', None)
+        threshold = step_config.get('threshold', 1e-12)
+        # TODO: implement picks
+        #picks = self._get_picks(data[].info, picks_params)
+
+        variances = data['raw'].get_data().var(axis=1)
+        flat_idx = np.where(variances < threshold)[0]
+        flat_chs = [data['raw'].ch_names[i] for i in flat_idx]
+        
+        if flat_chs:
+            data['raw'].info['bads'].extend([ch for ch in flat_chs if ch not in data['raw'].info['bads']])
+        
+        data['preprocessing_steps'].append({
+            'step': 'find_flat_channels',
+            'instance': 'raw',
+            'picks': picks_params,
+            'apply_on': ['raw'],
+            'threshold': threshold,
+            'bad_channels': flat_chs,
+            'n_bad_channels': len(flat_chs)
         })
 
         return data
@@ -743,6 +861,7 @@ class EEGPreprocessingPipeline:
 
         if 'events' in data and data['events'] is not None:
             try:
+                # TODO: check how to make the event names to appear
                 html_report.add_events(
                     events=data['events'],
                     sfreq=data['events_sfreq'],
@@ -804,21 +923,13 @@ class EEGPreprocessingPipeline:
         logger.info(f"Reading BIDS data from:")
         for bp in bids_path:
             logger.info(f"  - {bp.fpath}")
+
         # Read all BIDS raws and concatenate into a single Raw object
-        raw_list = [read_raw_bids(bids_path=bp, verbose=False) for bp in bids_path]
+        data['all_raw'] = [read_raw_bids(bids_path=bp, verbose=False) for bp in bids_path]
 
-        # Ensure data are loaded into memory for concatenation
-        for raw in raw_list:
+        # Ensure data are loaded into memory for processing
+        for raw in data['all_raw']:
             raw.load_data()
-
-        # Concatenate when there are multiple recordings, otherwise keep single raw
-        if len(raw_list) > 1:
-            data['raw'] = mne.concatenate_raws(raw_list)
-        else:
-            data['raw'] = raw_list[0]
-
-        # Keep references / metadata
-        data['all_raw'] = raw_list
 
         # Get pipeline steps from config
         pipeline_steps = self._get_pipeline_steps()
@@ -891,7 +1002,7 @@ class EEGPreprocessingPipeline:
         sessions = self._get_entity_values('session', sessions)
         tasks = self._get_entity_values('task', tasks)
         acquisitions = self._get_entity_values('acquisition', acquisitions)
-
+        
         # print subjects, sessions, tasks, acquisitions
         logger.info(f"Subjects to process: {subjects}")
         logger.info(f"Sessions to process: {sessions}")
