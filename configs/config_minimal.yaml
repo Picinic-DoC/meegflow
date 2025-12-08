@@ -137,7 +137,7 @@ pipeline:
   - name: find_bads_epochs_threshold
     apply_on: ['epochs', 'raw']
     reject:
-      eeg: 1.0e-4
+      eeg: 2.0e-4
     n_channels_bad_epoch: 0.1
 
   - name: reference
