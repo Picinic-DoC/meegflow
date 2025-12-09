@@ -47,7 +47,7 @@ pipeline:
   
   - name: find_bads_channels_threshold
     reject:
-      eeg: 1.0e-4
+      eeg: 2.0e-4
     n_epochs_bad_ch: 0.5
     apply_on: ['raw']
   
