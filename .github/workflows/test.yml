@@ -48,7 +48,37 @@ jobs:
       run: |
         echo "Running adaptive reject functional tests..."
         python tests/test_adaptive_reject_functional.py
-    
+      
+    - name: Run excluded channels integration tests
+      run: |
+        echo "Running excluded channels integration tests..."
+        python tests/test_excluded_channels_integration.py
+
+    - name: Run excluded channels tests
+      run: |
+        echo "Running excluded channels tests..."
+        python tests/test_excluded_channels.py
+
+    - name: Run find matching paths integration tests
+      run: |
+        echo "Running find matching paths integration tests..."
+        python tests/test_find_matching_paths_integration.py
+
+    - name: Run HTML report enhancements tests
+      run: |
+        echo "Running HTML report enhancements tests..."
+        python tests/test_html_report_enhancements.py
+
+    - name: Run progress bars tests
+      run: |
+        echo "Running progress bars tests..."
+        python tests/test_progress_bars.py
+
+    - name: Run report module tests
+      run: |
+        echo "Running report module tests..."
+        python tests/test_report_module.py
+
     - name: Test summary
       if: always()
       run: |
