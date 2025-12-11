@@ -424,11 +424,15 @@ class EEGPreprocessingPipeline:
     def _step_interpolate_bad_channels(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Interpolate bad channels."""
         instance = step_config.get('instance', 'epochs')
+        excluded_channels = step_config.get('excluded_channels', None)
 
         if instance not in data:
             raise ValueError(f"interpolate_bad_channels step requires '{instance}' to be present in data (either 'raw' or 'epochs')")
 
-        data[instance].interpolate_bads(reset_bads=True)
+        data[instance].interpolate_bads(
+            reset_bads=True,
+            exclude=excluded_channels
+        )
 
         data['preprocessing_steps'].append({
             'step': 'interpolate_bad_channels',
@@ -445,6 +449,7 @@ class EEGPreprocessingPipeline:
         n_components = step_config.get('n_components', 20)
         random_state = step_config.get('random_state', 97)
         method = step_config.get('method', 'fastica')
+        picks_params = step_config.get('picks', None)
         excluded_channels = step_config.get('excluded_channels', None)
 
         ica = mne.preprocessing.ICA(
@@ -453,15 +458,15 @@ class EEGPreprocessingPipeline:
             method=method,
             max_iter='auto'
         )
-        # Restrict picks to EEG channels only, if present
-        picks = mne.pick_types(data['raw'].info, eeg=True, eog=False, meg=False, exclude='bads')
-        # Apply channel exclusion if specified
-        picks = self._apply_excluded_channels(data['raw'].info, picks, excluded_channels)
+
+        # Compute picks if provided
+        picks = self._get_picks(data['raw'].info, picks_params, excluded_channels)
         
         ica.fit(data['raw'], picks=picks)
 
         # Automatically find and exclude artifacts
         excluded_components = defaultdict(list)
+
         if step_config.get('find_eog', False):
             try:
                 eog_indices, eog_scores = ica.find_bads_eog(data['raw'])
