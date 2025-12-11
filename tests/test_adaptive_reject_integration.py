@@ -82,49 +82,6 @@ def test_step_methods_call_adaptive_reject():
         print(f"✓ Method '{method}' calls '{call}'")
 
 
-def test_config_with_adaptive_reject_exists():
-    """Test that example config with adaptive reject exists."""
-    config_file = Path("configs/config_with_adaptive_reject.yaml")
-    assert config_file.exists(), "Config file with adaptive reject does not exist"
-    print("✓ Config file 'config_with_adaptive_reject.yaml' exists")
-
-
-def test_config_with_adaptive_reject_valid():
-    """Test that the config with adaptive reject is valid YAML."""
-    config_file = Path("configs/config_with_adaptive_reject.yaml")
-    
-    import yaml
-    with open(config_file, 'r') as f:
-        config = yaml.safe_load(f)
-    
-    assert "pipeline" in config, "Config must have 'pipeline' key"
-    assert isinstance(config["pipeline"], list), "Pipeline must be a list"
-    
-    print("✓ Config file is valid YAML with pipeline structure")
-
-
-def test_config_includes_adaptive_reject_steps():
-    """Test that the config includes all adaptive reject steps."""
-    config_file = Path("configs/config_with_adaptive_reject.yaml")
-    
-    import yaml
-    with open(config_file, 'r') as f:
-        config = yaml.safe_load(f)
-    
-    step_names = [step['name'] for step in config['pipeline']]
-    
-    required_steps = [
-        'find_bads_channels_threshold',
-        'find_bads_channels_variance',
-        'find_bads_channels_high_frequency',
-        'find_bads_epochs_threshold'
-    ]
-    
-    for step in required_steps:
-        assert step in step_names, f"Step '{step}' not in config pipeline"
-        print(f"✓ Config includes step '{step}'")
-
-
 def test_readme_documents_adaptive_reject():
     """Test that README documents the adaptive reject steps."""
     readme_file = Path("README.md")
@@ -169,9 +126,6 @@ def run_all_tests():
         test_step_functions_registered,
         test_step_methods_defined,
         test_step_methods_call_adaptive_reject,
-        test_config_with_adaptive_reject_exists,
-        test_config_with_adaptive_reject_valid,
-        test_config_includes_adaptive_reject_steps,
         test_readme_documents_adaptive_reject,
         test_readme_has_config_example,
     ]

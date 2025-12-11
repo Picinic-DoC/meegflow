@@ -297,6 +297,42 @@ These arguments use the same matching logic as `mne-bids` `find_matching_paths`.
 
 Each step can be customized through the configuration:
 
+### Excluding Channels from Analysis
+
+Many preprocessing steps support an `excluded_channels` parameter that allows you to exclude specific channels (e.g., reference channels like 'Cz') from analysis to avoid reference problems. This is useful when you want to preserve a reference channel or exclude channels that should not be analyzed in certain steps.
+
+**Steps that support `excluded_channels`:**
+- `bandpass_filter` - Exclude channels from filtering
+- `notch_filter` - Exclude channels from notch filtering
+- `ica` - Exclude channels from ICA decomposition
+- `find_flat_channels` - Exclude channels from flat channel detection
+- `find_bads_channels_threshold` - Exclude channels from bad channel detection
+- `find_bads_channels_variance` - Exclude channels from variance-based detection
+- `find_bads_channels_high_frequency` - Exclude channels from high-frequency analysis
+- `find_bads_epochs_threshold` - Exclude channels from epoch rejection criteria
+
+**Steps where exclusion doesn't apply:**
+- `reference` - Reference computation uses selected channels; use `ref_channels` parameter instead
+- `interpolate_bad_channels` - Operates only on channels marked as bad
+- `resample` - Resamples all data uniformly
+- `set_montage` - Sets electrode positions for all channels
+- `drop_unused_channels` - Use this for explicit channel removal
+
+**Example usage:**
+```yaml
+- name: bandpass_filter
+  l_freq: 0.5
+  h_freq: 45.0
+  excluded_channels: ['Cz']  # Exclude Cz from filtering
+
+- name: find_bads_channels_threshold
+  reject:
+    eeg: 1.0e-4
+  excluded_channels: ['Cz', 'FCz']  # Don't mark these as bad
+```
+
+See `configs/config_with_excluded_channels.yaml` for a complete example.
+
 ### 1. set_montage
 Set channel montage for EEG data. Useful when data lacks electrode position information.
 - `montage`: Name of standard montage to use (default: 'standard_1020')
@@ -313,6 +349,7 @@ Apply bandpass filtering.
 - `l_freq_order`: Filter order for high-pass (default: 6)
 - `h_freq_order`: Filter order for low-pass (default: 8)
 - `picks`: Optional channel indices to filter
+- `excluded_channels`: List of channel names to exclude from filtering (optional)
 - `n_jobs`: Number of parallel jobs (default: 1)
 
 ### 4. notch_filter
@@ -321,6 +358,7 @@ Apply notch filtering to remove line noise.
 - `notch_widths`: Width of notch filters (optional)
 - `method`: Filtering method (default: 'fft')
 - `picks`: Optional channel indices to filter
+- `excluded_channels`: List of channel names to exclude from filtering (optional)
 - `n_jobs`: Number of parallel jobs (default: 1)
 
 ### 5. resample
@@ -345,6 +383,7 @@ ICA-based artifact removal.
 - `n_components`: Number of ICA components (default: 20)
 - `method`: ICA method ('fastica', 'infomax', 'picard', default: 'fastica')
 - `random_state`: Random state for reproducibility (default: 97)
+- `excluded_channels`: List of channel names to exclude from ICA decomposition (optional)
 - `find_eog`: Automatically find EOG artifacts (true/false, default: true)
 - `find_ecg`: Automatically find ECG artifacts (true/false, default: false)
 - `apply`: Apply ICA to remove artifacts (true/false, default: true)
@@ -364,6 +403,7 @@ Create epochs around events.
 ### 11. find_bads_channels_threshold
 Find bad channels using threshold-based rejection. Marks channels as bad if they exceed rejection thresholds in too many epochs.
 - `picks`: Channel indices to check (optional, default: EEG channels)
+- `excluded_channels`: List of channel names to exclude from bad channel detection (optional)
 - `reject`: Rejection thresholds by channel type (e.g., `{"eeg": 150e-6}`)
 - `n_epochs_bad_ch`: Fraction or number of epochs a channel must be bad in to be marked as bad (default: 0.5)
 - `apply_on`: List of instances to mark bad channels on (default: ['epochs'])
@@ -372,6 +412,7 @@ Find bad channels using threshold-based rejection. Marks channels as bad if they
 Find bad channels using variance-based detection. Identifies channels with abnormally high or low variance.
 - `instance`: Which data instance to use - 'raw' or 'epochs' (default: 'epochs')
 - `picks`: Channel indices to check (optional, default: EEG channels)
+- `excluded_channels`: List of channel names to exclude from variance analysis (optional)
 - `zscore_thresh`: Z-score threshold for outlier detection (default: 4)
 - `max_iter`: Maximum iterations for iterative outlier removal (default: 2)
 - `apply_on`: List of instances to mark bad channels on (default: [instance])
@@ -380,6 +421,7 @@ Find bad channels using variance-based detection. Identifies channels with abnor
 Find bad channels using high-frequency variance. Detects channels with excessive high-frequency noise.
 - `instance`: Which data instance to use - 'raw' or 'epochs' (default: 'epochs')
 - `picks`: Channel indices to check (optional, default: EEG channels)
+- `excluded_channels`: List of channel names to exclude from high-frequency analysis (optional)
 - `zscore_thresh`: Z-score threshold for outlier detection (default: 4)
 - `max_iter`: Maximum iterations for iterative outlier removal (default: 2)
 - `apply_on`: List of instances to mark bad channels on (default: [instance])
@@ -387,6 +429,7 @@ Find bad channels using high-frequency variance. Detects channels with excessive
 ### 14. find_bads_epochs_threshold
 Find and remove bad epochs using threshold-based rejection. Drops epochs that have too many bad channels.
 - `picks`: Channel indices to check (optional, default: EEG channels)
+- `excluded_channels`: List of channel names to exclude from epoch rejection criteria (optional)
 - `reject`: Rejection thresholds by channel type (e.g., `{"eeg": 150e-6}`)
 - `n_channels_bad_epoch`: Fraction or number of channels that must be bad for an epoch to be rejected (default: 0.1)
 
