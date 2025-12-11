@@ -874,13 +874,14 @@ class EEGPreprocessingPipeline:
                 pass
 
         if 'epochs' in data and data['epochs'] is not None:
+
             try:
                 html_report.add_epochs(epochs=data['epochs'], title='Clean Epochs')
-                evoked = data['epochs'].average()
+                evoked = data['epochs'].average(by_event_type=True)
                 html_report.add_evokeds(
                     evokeds=evoked,
-                    n_time_points=5,
-                    titles='Average Evoked Response'
+                    n_time_points=step_config.get('n_time_points', 5),
+                    titles='Average Evoked Responses'
                 )
             except Exception:
                 pass
