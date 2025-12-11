@@ -33,15 +33,10 @@ def test_run_pipeline_signature():
     expected_params = [
         'self',
         'subjects',
-        'sessions', 
+        'sessions',
         'tasks',
         'acquisitions',
-        'runs',
-        'processings',
-        'recordings',
-        'spaces',
-        'splits',
-        'descriptions'
+        'extension',
     ]
     
     for param in expected_params:
@@ -72,48 +67,23 @@ def test_cli_has_new_arguments():
     
     # Check for new arguments
     expected_args = [
+        '--bids-root',
+        '--output-root',
         '--subjects',
         '--sessions',
         '--tasks',
         '--acquisitions',
         '--runs',
-        '--processings',
-        '--recordings',
-        '--spaces',
-        '--splits',
-        '--descriptions'
+        '--extension',
+        '--config', 
+        '--log-file',
+        '--log-level',
     ]
     
     for arg in expected_args:
         assert arg in code, f"Argument '{arg}' not found in CLI"
     
     print("✓ CLI has all new arguments")
-
-
-def test_find_matching_paths_is_imported():
-    """Test that find_matching_paths is imported in the pipeline."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
-    with open(pipeline_file, 'r') as f:
-        code = f.read()
-    
-    assert "from mne_bids import" in code, "mne_bids import not found"
-    assert "find_matching_paths" in code, "find_matching_paths not imported"
-    
-    print("✓ find_matching_paths is imported")
-
-
-def test_find_matching_paths_is_called():
-    """Test that find_matching_paths is called in run_pipeline."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
-    with open(pipeline_file, 'r') as f:
-        code = f.read()
-    
-    assert "find_matching_paths(" in code, "find_matching_paths not called"
-    assert "root=self.bids_root" in code, "root parameter not passed to find_matching_paths"
-    assert "subjects=subjects" in code, "subjects parameter not passed to find_matching_paths"
-    assert "tasks=tasks" in code, "tasks parameter not passed to find_matching_paths"
-    
-    print("✓ find_matching_paths is called with correct parameters")
 
 
 def test_subjects_parameter_accepts_none():
@@ -182,8 +152,6 @@ def run_all_tests():
         test_run_pipeline_signature,
         test_cli_passes_correct_arguments,
         test_cli_has_new_arguments,
-        test_find_matching_paths_is_imported,
-        test_find_matching_paths_is_called,
         test_subjects_parameter_accepts_none,
         test_tasks_parameter_accepts_none,
         test_cli_subjects_not_required,

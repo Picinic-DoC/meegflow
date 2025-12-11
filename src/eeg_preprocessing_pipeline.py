@@ -69,19 +69,21 @@ class EEGPreprocessingPipeline:
     
         raise ValueError(f"Invalid type for entity '{entity_key}': {type(entity_value)}")
 
-    def _find_events_from_raw(self, raw, shortest_event=1, event_id='auto'):
-        try:
-            # First attempt: use stim channel(s)
-            events = mne.find_events(raw, shortest_event=shortest_event)
-        except ValueError as e:
-            # If no stim channel found → fallback to annotations
-            if "No stim channels found" in str(e):
-                events, event_id = mne.events_from_annotations(raw, event_id=event_id)
-            else:
-                # re-raise if it's some other error
-                raise
+    def _find_events_from_raw(self, raw, get_events_from='annotations', shortest_event=1, event_id='auto', stim_channel=None):
+        
+        if get_events_from == 'stim_channel':
+            return mne.find_events(
+                raw,
+                shortest_event=shortest_event,
+                stim_channel=stim_channel,
+                verbose=False
+            )
+        
+        if get_events_from == 'annotations':
+            events, _ = mne.events_from_annotations(raw, event_id=event_id)
+            return events
 
-        return events
+        raise ValueError(f"Invalid get_events_from method: {get_events_from}")
 
     def _get_pipeline_steps(self) -> List[Dict[str, Any]]:
         """Retrieve the list of pipeline steps from the configuration."""
@@ -121,6 +123,7 @@ class EEGPreprocessingPipeline:
         instance = step_config.get('instance', 'raw')
         start_padding = step_config.get('start_padding', 1)
         end_padding = step_config.get('end_padding', 1)
+        get_events_from = step_config.get('get_events_from', 'annotations')
         shortest_event = step_config.get('shortest_event', 1)
         event_id = step_config.get('event_id', 'auto')
         
@@ -134,7 +137,12 @@ class EEGPreprocessingPipeline:
             all_instances = [all_instances]
 
         for i, inst in enumerate(all_instances):
-            events = self._find_events_from_raw(inst, shortest_event=shortest_event, event_id=event_id)
+            events = self._find_events_from_raw(
+                inst,
+                get_events_from=get_events_from,
+                shortest_event=shortest_event,
+                event_id=event_id
+            )
             
             start = inst.times[events[0,0]] - start_padding
             end = inst.times[events[-1,0]] + end_padding
@@ -435,21 +443,16 @@ class EEGPreprocessingPipeline:
         if 'raw' not in data:
             raise ValueError("find_events requires 'raw' in data")
 
+        get_events_from = step_config.get('get_events_from', 'annotations')
         shortest_event = step_config.get('shortest_event', 1)
         event_id = step_config.get('event_id', 'auto')
         
-        # TODO: make method a parameter instead of try and catch
-        try:
-            # First attempt: use stim channel(s)
-            events = mne.find_events(data['raw'], shortest_event=shortest_event)
-        except ValueError as e:
-            # If no stim channel found → fallback to annotations
-            if "No stim channels found" in str(e):
-                events, event_id = mne.events_from_annotations(data['raw'], event_id=event_id)
-            else:
-                # re-raise if it's some other error
-                raise
-        data['events'] = events
+        data['events'] = self._find_events_from_raw(
+            data['raw'],
+            get_events_from=get_events_from,
+            shortest_event=shortest_event,
+            event_id=event_id
+        )
         data['events_sfreq'] = data['raw'].info['sfreq']
 
         data['preprocessing_steps'].append({
@@ -676,8 +679,6 @@ class EEGPreprocessingPipeline:
         bad_epochs = adaptive_reject.find_bads_epochs_threshold(
             data['epochs'], picks, reject, n_channels_bad_epoch
         )
-
-        bad_epochs = [2, 15]
 
         # Drop bad epochs
         if len(bad_epochs) > 0:
@@ -979,7 +980,7 @@ class EEGPreprocessingPipeline:
         acquisitions: Union[str, List[str]] = None,
         extension: str = '.vhdr'
     ) -> Dict[str, Any]:
-        """Run the pipeline using mne-bids find_matching_paths to query files.
+        """Run the pipeline using mne-bids to query files.
 
         Parameters
         ----------
