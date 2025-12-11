@@ -79,6 +79,11 @@ jobs:
         echo "Running report module tests..."
         python tests/test_report_module.py
 
+    - name: Run find flat channels
+      run: |
+        echo "Running find flat channels tests..."
+        python tests/test_find_flat_channels.py
+
     - name: Test summary
       if: always()
       run: |
