@@ -72,16 +72,17 @@ class EEGPreprocessingPipeline:
     def _find_events_from_raw(self, raw, get_events_from='annotations', shortest_event=1, event_id='auto', stim_channel=None):
         
         if get_events_from == 'stim_channel':
-            return mne.find_events(
+            events = mne.find_events(
                 raw,
                 shortest_event=shortest_event,
                 stim_channel=stim_channel,
                 verbose=False
             )
+            return events, None
         
         if get_events_from == 'annotations':
-            events, _ = mne.events_from_annotations(raw, event_id=event_id)
-            return events
+            events, found_event_id = mne.events_from_annotations(raw, event_id=event_id)
+            return events, found_event_id
 
         raise ValueError(f"Invalid get_events_from method: {get_events_from}")
 
@@ -137,7 +138,7 @@ class EEGPreprocessingPipeline:
             all_instances = [all_instances]
 
         for i, inst in enumerate(all_instances):
-            events = self._find_events_from_raw(
+            events, _ = self._find_events_from_raw(
                 inst,
                 get_events_from=get_events_from,
                 shortest_event=shortest_event,
@@ -447,12 +448,13 @@ class EEGPreprocessingPipeline:
         shortest_event = step_config.get('shortest_event', 1)
         event_id = step_config.get('event_id', 'auto')
         
-        data['events'] = self._find_events_from_raw(
+        data['events'], found_event_id = self._find_events_from_raw(
             data['raw'],
             get_events_from=get_events_from,
             shortest_event=shortest_event,
             event_id=event_id
         )
+        data['event_id'] = found_event_id
         data['events_sfreq'] = data['raw'].info['sfreq']
 
         data['preprocessing_steps'].append({
@@ -467,7 +469,7 @@ class EEGPreprocessingPipeline:
         if data.get('raw', None) is None or data.get('events', None) is None:
             raise ValueError("epoch step requires both 'raw' and 'events' in data")
 
-        event_id = step_config.get('event_id', None)
+        event_id = step_config.get('event_id', data.get('event_id', None))
         tmin = step_config.get('tmin', -0.2)
         tmax = step_config.get('tmax', 0.5)
         baseline = step_config.get('baseline', (None, 0.0))
@@ -862,9 +864,9 @@ class EEGPreprocessingPipeline:
 
         if 'events' in data and data['events'] is not None:
             try:
-                # TODO: check how to make the event names to appear
                 html_report.add_events(
                     events=data['events'],
+                    event_id=data.get('event_id', None),
                     sfreq=data['events_sfreq'],
                     title='Found Events',
                 )
