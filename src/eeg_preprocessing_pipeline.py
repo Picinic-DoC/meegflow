@@ -460,7 +460,7 @@ class EEGPreprocessingPipeline:
         data['preprocessing_steps'].append({
             'step': 'find_events',
             'found_event_id': found_event_id,
-            'found_evends': data['events'],
+            'found_evends': data['events'].tolist(),
             'n_events': data['events'].shape[0]
         })
 
@@ -471,7 +471,7 @@ class EEGPreprocessingPipeline:
         if data.get('raw', None) is None or data.get('events', None) is None:
             raise ValueError("epoch step requires both 'raw' and 'events' in data")
 
-        event_id = step_config.get('event_id', data.get('event_id', None))
+        event_id = step_config.get('event_id', None) or data.get('event_id', 'NOT FOUND')
         tmin = step_config.get('tmin', -0.2)
         tmax = step_config.get('tmax', 0.5)
         baseline = step_config.get('baseline', (None, 0.0))
@@ -879,11 +879,9 @@ class EEGPreprocessingPipeline:
 
             try:
                 html_report.add_epochs(epochs=data['epochs'], title='Clean Epochs')
-                evoked = data['epochs'].average(by_event_type=True)
                 html_report.add_evokeds(
-                    evokeds=evoked,
-                    n_time_points=step_config.get('n_time_points', 5),
-                    titles='Average Evoked Responses'
+                    evokeds=data['epochs'].average(by_event_type=True),
+                    n_time_points=step_config.get('n_time_points', None)
                 )
             except Exception:
                 pass

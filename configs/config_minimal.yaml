@@ -116,24 +116,6 @@ pipeline:
     tmin: -0.2
     tmax: 1.2
     baseline: [null, 0.0]
-    event_id:
-      #New Segment/: 1
-      #Response/Resp1New: 2
-      #Response/Resp1Old: 3
-      #Response/Resp2No: 4
-      #Response/Resp2Yes: 5
-      Stimulus/CatNewRepeated/CR: 91
-      #Stimulus/CatNewRepeated/FA: 92
-      Stimulus/CatNewUnique/CR: 93
-      #Stimulus/CatNewUnique/FA: 94
-      Stimulus/CatOld/Hit: 101
-      #Stimulus/CatOld/Miss: 102
-      #Stimulus/Fixation: 6
-      #Stimulus/ScreenResp1: 7
-      #Stimulus/ScreenResp2: 8
-      #Stimulus/StimNew: 9
-      #Stimulus/StimOld: 10
-      #Stimulus/brk-: 11
     reject: null
   
   - name: find_bads_epochs_threshold
