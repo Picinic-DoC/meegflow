@@ -352,6 +352,19 @@ ICA-based artifact removal.
 ### 9. find_events
 Find events in the data.
 - `shortest_event`: Minimum event duration in samples (default: 1)
+- `get_events_from`: Source of events ('annotations' or 'stim_channel', default: 'annotations')
+- `event_id`: Event ID mapping ('auto' for automatic mapping from annotations, or dict for custom mapping)
+- `keep_event_ids`: Optional list of event IDs to keep (filters out all other events). Useful when you only want to process specific stimulus types. For example, `keep_event_ids: [91, 93, 101]` will keep only events with these IDs.
+
+**Example - Filtering events:**
+```yaml
+  - name: find_events
+    shortest_event: 1
+    get_events_from: annotations
+    # Keep only events 91, 93, 101
+    # (e.g., Stimulus/CatNewRepeated/CR, Stimulus/CatNewUnique/CR, Stimulus/CatOld/Hit)
+    keep_event_ids: [91, 93, 101]
+```
 
 ### 10. epoch
 Create epochs around events.

@@ -1,0 +1,40 @@
+pipeline:
+  - name: load_data
+  
+  - name: bandpass_filter
+    l_freq: 0.5
+    h_freq: 40.0
+    
+  - name: reference
+    ref_channels: average
+    instance: 'raw'
+    
+  - name: find_events
+    shortest_event: 1
+    get_events_from: annotations
+    # Keep only relevant events for the LIBERATE dataset:
+    # - 91: Stimulus/CatNewRepeated/CR
+    # - 93: Stimulus/CatNewUnique/CR  
+    # - 101: Stimulus/CatOld/Hit
+    keep_event_ids: [91, 93, 101]
+    
+  - name: epoch
+    tmin: -0.2
+    tmax: 0.8
+    baseline: [null, 0]
+    # event_id can be null to use all filtered events, or specify a mapping
+    event_id: null
+    reject:
+      eeg: 1.5e-04
+      
+  - name: find_bads_epochs_threshold
+    reject:
+      eeg: 2.0e-4
+    n_channels_bad_epoch: 0.1
+    
+  - name: save_clean_instance
+    instance: epochs
+    
+  - name: generate_json_report
+  
+  - name: generate_html_report

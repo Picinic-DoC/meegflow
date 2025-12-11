@@ -8,6 +8,9 @@ pipeline:
     instance: 'raw'
   - name: find_events
     shortest_event: 1
+    # keep_event_ids parameter allows filtering events to keep only specific IDs
+    # Example: keep only events 91, 93, 101 (Stimulus/CatNewRepeated/CR, Stimulus/CatNewUnique/CR, Stimulus/CatOld/Hit)
+    # keep_event_ids: [91, 93, 101]
   - name: epoch
     tmin: -0.2
     tmax: 0.8

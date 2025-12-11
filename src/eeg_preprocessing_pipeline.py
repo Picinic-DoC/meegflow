@@ -73,16 +73,17 @@ class EEGPreprocessingPipeline:
     def _find_events_from_raw(self, raw, get_events_from='annotations', shortest_event=1, event_id='auto', stim_channel=None):
         
         if get_events_from == 'stim_channel':
-            return mne.find_events(
+            events = mne.find_events(
                 raw,
                 shortest_event=shortest_event,
                 stim_channel=stim_channel,
                 verbose=False
             )
+            return events, None
         
         if get_events_from == 'annotations':
-            events, _ = mne.events_from_annotations(raw, event_id=event_id)
-            return events
+            events, event_id_mapping = mne.events_from_annotations(raw, event_id=event_id)
+            return events, event_id_mapping
 
         raise ValueError(f"Invalid get_events_from method: {get_events_from}")
 
@@ -157,7 +158,7 @@ class EEGPreprocessingPipeline:
             all_instances = [all_instances]
 
         for i, inst in enumerate(all_instances):
-            events = self._find_events_from_raw(
+            events, _ = self._find_events_from_raw(
                 inst,
                 get_events_from=get_events_from,
                 shortest_event=shortest_event,
@@ -466,18 +467,71 @@ class EEGPreprocessingPipeline:
         get_events_from = step_config.get('get_events_from', 'annotations')
         shortest_event = step_config.get('shortest_event', 1)
         event_id = step_config.get('event_id', 'auto')
+        keep_event_ids = step_config.get('keep_event_ids', None)
         
-        data['events'] = self._find_events_from_raw(
+        events, event_id_mapping = self._find_events_from_raw(
             data['raw'],
             get_events_from=get_events_from,
             shortest_event=shortest_event,
             event_id=event_id
         )
+        
+        # Store the event_id mapping if available
+        if event_id_mapping is not None:
+            data['event_id_mapping'] = event_id_mapping
+        
+        # Filter events to keep only specific event IDs if requested
+        n_events_before_filter = len(events)
+        if keep_event_ids is not None:
+            # Convert to list if single value
+            if not isinstance(keep_event_ids, list):
+                keep_event_ids = [keep_event_ids]
+            
+            # If we have an event_id_mapping from annotations, we need to map
+            # the requested event IDs (which are annotation descriptions as integers)
+            # to the actual event codes used in the events array
+            if event_id_mapping is not None:
+                # Create reverse mapping: description (as string) -> event code
+                # and then filter based on keep_event_ids
+                mapped_ids = []
+                for keep_id in keep_event_ids:
+                    # Look for this ID in the event_id_mapping
+                    # The keys can be strings like '91' or numpy strings
+                    for desc, code in event_id_mapping.items():
+                        # Try to convert description to int for comparison
+                        try:
+                            if int(str(desc)) == keep_id:
+                                mapped_ids.append(code)
+                                break
+                        except (ValueError, TypeError):
+                            # Description is not a number, skip
+                            pass
+                
+                if mapped_ids:
+                    logger.info(f"Mapping keep_event_ids {keep_event_ids} to event codes {mapped_ids}")
+                    keep_event_ids_to_filter = mapped_ids
+                else:
+                    logger.warning(f"Could not find any matching event IDs for {keep_event_ids} in event_id_mapping")
+                    keep_event_ids_to_filter = keep_event_ids
+            else:
+                # No mapping available, use IDs directly
+                keep_event_ids_to_filter = keep_event_ids
+            
+            # Filter events array to keep only specified event IDs
+            mask = np.isin(events[:, 2], keep_event_ids_to_filter)
+            events = events[mask]
+            
+            logger.info(f"Filtered events: kept {len(events)} out of {n_events_before_filter} events")
+            logger.info(f"Requested event IDs: {keep_event_ids}")
+        
+        data['events'] = events
         data['events_sfreq'] = data['raw'].info['sfreq']
 
         data['preprocessing_steps'].append({
             'step': 'find_events',
-            'n_events': len(data['events'])
+            'n_events': len(data['events']),
+            'n_events_before_filter': n_events_before_filter,
+            'keep_event_ids': keep_event_ids
         })
 
         return data
