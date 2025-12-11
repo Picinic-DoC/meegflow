@@ -491,27 +491,43 @@ class EEGPreprocessingPipeline:
             # the requested event IDs (which are annotation descriptions as integers)
             # to the actual event codes used in the events array
             if event_id_mapping is not None:
-                # Create reverse mapping: description (as string) -> event code
-                # and then filter based on keep_event_ids
+                # Create a more efficient mapping by pre-converting all descriptions
+                # Build a dict: numeric_description -> event_code
+                desc_to_code = {}
+                for desc, code in event_id_mapping.items():
+                    # Try to convert description to int and store in mapping
+                    try:
+                        numeric_desc = int(str(desc))
+                        desc_to_code[numeric_desc] = code
+                    except (ValueError, TypeError):
+                        # Description is not numeric (e.g., 'button_press'), skip it
+                        # This is expected behavior for non-numeric annotations
+                        logger.debug(f"Skipping non-numeric annotation description: {desc}")
+                        continue
+                
+                # Now map the requested IDs to event codes
                 mapped_ids = []
+                unmapped_ids = []
                 for keep_id in keep_event_ids:
-                    # Look for this ID in the event_id_mapping
-                    # The keys can be strings like '91' or numpy strings
-                    for desc, code in event_id_mapping.items():
-                        # Try to convert description to int for comparison
-                        try:
-                            if int(str(desc)) == keep_id:
-                                mapped_ids.append(code)
-                                break
-                        except (ValueError, TypeError):
-                            # Description is not a number, skip
-                            pass
+                    if keep_id in desc_to_code:
+                        mapped_ids.append(desc_to_code[keep_id])
+                    else:
+                        unmapped_ids.append(keep_id)
+                
+                if unmapped_ids:
+                    logger.warning(
+                        f"Could not find matching event codes for IDs {unmapped_ids}. "
+                        f"Available numeric annotations: {list(desc_to_code.keys())}"
+                    )
                 
                 if mapped_ids:
                     logger.info(f"Mapping keep_event_ids {keep_event_ids} to event codes {mapped_ids}")
                     keep_event_ids_to_filter = mapped_ids
                 else:
-                    logger.warning(f"Could not find any matching event IDs for {keep_event_ids} in event_id_mapping")
+                    logger.warning(
+                        f"Could not map any of the requested event IDs {keep_event_ids}. "
+                        "Attempting to use them directly as event codes."
+                    )
                     keep_event_ids_to_filter = keep_event_ids
             else:
                 # No mapping available, use IDs directly

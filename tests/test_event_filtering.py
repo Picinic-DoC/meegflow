@@ -24,6 +24,7 @@ sys.path.insert(0, str(src_dir))
 def test_event_filtering_basic():
     """Test basic event filtering functionality."""
     from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    import tempfile
     
     # Create synthetic raw data with events
     info = mne.create_info(
@@ -46,71 +47,72 @@ def test_event_filtering_basic():
     annotations = mne.Annotations(onset, duration, description)
     raw.set_annotations(annotations)
     
-    # Create pipeline data structure
-    pipeline = EEGPreprocessingPipeline(
-        bids_root='/tmp/test',
-        config={'pipeline': []}
-    )
-    
-    data_dict = {
-        'raw': raw,
-        'preprocessing_steps': []
-    }
-    
-    # Test find_events step WITHOUT filtering
-    step_config_no_filter = {
-        'get_events_from': 'annotations',
-        'event_id': 'auto'
-    }
-    
-    data_dict = pipeline._step_find_events(data_dict, step_config_no_filter)
-    
-    # Check that all events were found
-    assert len(data_dict['events']) == 10, f"Expected 10 events, got {len(data_dict['events'])}"
-    
-    # Test find_events step WITH filtering (keep only 91, 93, 101)
-    data_dict_filtered = {
-        'raw': raw,
-        'preprocessing_steps': []
-    }
-    
-    step_config_filter = {
-        'get_events_from': 'annotations',
-        'event_id': 'auto',
-        'keep_event_ids': [91, 93, 101]
-    }
-    
-    data_dict_filtered = pipeline._step_find_events(data_dict_filtered, step_config_filter)
-    
-    # Check that only events 91, 93, 101 were kept
-    # Count: 91 appears 3 times, 93 appears 3 times, 101 appears 2 times = 8 total
-    assert len(data_dict_filtered['events']) == 8, \
-        f"Expected 8 filtered events (3x91 + 3x93 + 2x101), got {len(data_dict_filtered['events'])}"
-    
-    # Verify that the filtering worked by checking the event_id_mapping
-    # The actual event codes in the events array are mapped from the annotation descriptions
-    event_id_mapping = data_dict_filtered['event_id_mapping']
-    
-    # Get the event codes that correspond to our target annotations (91, 93, 101)
-    target_annotations = ['91', '93', '101']
-    expected_codes = []
-    for ann in target_annotations:
-        for desc, code in event_id_mapping.items():
-            if str(desc) == ann:
-                expected_codes.append(code)
-                break
-    
-    # Verify that only the expected event codes are present in the filtered events
-    event_codes_in_filtered = np.unique(data_dict_filtered['events'][:, 2])
-    assert set(event_codes_in_filtered) == set(expected_codes), \
-        f"Filtered events contain unexpected codes. Got {event_codes_in_filtered}, expected {expected_codes}"
-    
-    # Check preprocessing steps metadata
-    step_info = data_dict_filtered['preprocessing_steps'][-1]
-    assert step_info['step'] == 'find_events'
-    assert step_info['n_events'] == 8
-    assert step_info['n_events_before_filter'] == 10
-    assert step_info['keep_event_ids'] == [91, 93, 101]
+    # Create pipeline data structure with temporary directory
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pipeline = EEGPreprocessingPipeline(
+            bids_root=tmpdir,
+            config={'pipeline': []}
+        )
+        
+        data_dict = {
+            'raw': raw,
+            'preprocessing_steps': []
+        }
+        
+        # Test find_events step WITHOUT filtering
+        step_config_no_filter = {
+            'get_events_from': 'annotations',
+            'event_id': 'auto'
+        }
+        
+        data_dict = pipeline._step_find_events(data_dict, step_config_no_filter)
+        
+        # Check that all events were found
+        assert len(data_dict['events']) == 10, f"Expected 10 events, got {len(data_dict['events'])}"
+        
+        # Test find_events step WITH filtering (keep only 91, 93, 101)
+        data_dict_filtered = {
+            'raw': raw,
+            'preprocessing_steps': []
+        }
+        
+        step_config_filter = {
+            'get_events_from': 'annotations',
+            'event_id': 'auto',
+            'keep_event_ids': [91, 93, 101]
+        }
+        
+        data_dict_filtered = pipeline._step_find_events(data_dict_filtered, step_config_filter)
+        
+        # Check that only events 91, 93, 101 were kept
+        # Count: 91 appears 3 times, 93 appears 3 times, 101 appears 2 times = 8 total
+        assert len(data_dict_filtered['events']) == 8, \
+            f"Expected 8 filtered events (3x91 + 3x93 + 2x101), got {len(data_dict_filtered['events'])}"
+        
+        # Verify that the filtering worked by checking the event_id_mapping
+        # The actual event codes in the events array are mapped from the annotation descriptions
+        event_id_mapping = data_dict_filtered['event_id_mapping']
+        
+        # Get the event codes that correspond to our target annotations (91, 93, 101)
+        target_annotations = ['91', '93', '101']
+        expected_codes = []
+        for ann in target_annotations:
+            for desc, code in event_id_mapping.items():
+                if str(desc) == ann:
+                    expected_codes.append(code)
+                    break
+        
+        # Verify that only the expected event codes are present in the filtered events
+        event_codes_in_filtered = np.unique(data_dict_filtered['events'][:, 2])
+        assert set(event_codes_in_filtered) == set(expected_codes), \
+            f"Filtered events contain unexpected codes. Got {event_codes_in_filtered}, expected {expected_codes}"
+        
+        # Check preprocessing steps metadata
+        step_info = data_dict_filtered['preprocessing_steps'][-1]
+        assert step_info['step'] == 'find_events'
+        assert step_info['n_events'] == 8
+        assert step_info['n_events_before_filter'] == 10
+        assert step_info['keep_event_ids'] == [91, 93, 101]
     
     print("✓ Event filtering test passed")
     return True
@@ -119,6 +121,7 @@ def test_event_filtering_basic():
 def test_event_filtering_with_epoch():
     """Test that filtered events work correctly with epoching."""
     from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    import tempfile
     
     # Create synthetic raw data with events
     info = mne.create_info(
@@ -140,39 +143,40 @@ def test_event_filtering_with_epoch():
     annotations = mne.Annotations(onset, duration, description)
     raw.set_annotations(annotations)
     
-    # Create pipeline
-    pipeline = EEGPreprocessingPipeline(
-        bids_root='/tmp/test',
-        config={'pipeline': []}
-    )
-    
-    data_dict = {
-        'raw': raw,
-        'preprocessing_steps': []
-    }
-    
-    # Apply find_events with filtering
-    step_config_events = {
-        'get_events_from': 'annotations',
-        'event_id': 'auto',
-        'keep_event_ids': [91, 93, 101]
-    }
-    
-    data_dict = pipeline._step_find_events(data_dict, step_config_events)
-    
-    # Apply epoching
-    step_config_epoch = {
-        'tmin': -0.2,
-        'tmax': 0.5,
-        'baseline': (None, 0),
-        'event_id': None
-    }
-    
-    data_dict = pipeline._step_epoch(data_dict, step_config_epoch)
-    
-    # Should have 3 epochs (91, 93, 101)
-    assert len(data_dict['epochs']) == 3, \
-        f"Expected 3 epochs after filtering, got {len(data_dict['epochs'])}"
+    # Create pipeline with temporary directory
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pipeline = EEGPreprocessingPipeline(
+            bids_root=tmpdir,
+            config={'pipeline': []}
+        )
+        
+        data_dict = {
+            'raw': raw,
+            'preprocessing_steps': []
+        }
+        
+        # Apply find_events with filtering
+        step_config_events = {
+            'get_events_from': 'annotations',
+            'event_id': 'auto',
+            'keep_event_ids': [91, 93, 101]
+        }
+        
+        data_dict = pipeline._step_find_events(data_dict, step_config_events)
+        
+        # Apply epoching
+        step_config_epoch = {
+            'tmin': -0.2,
+            'tmax': 0.5,
+            'baseline': (None, 0),
+            'event_id': None
+        }
+        
+        data_dict = pipeline._step_epoch(data_dict, step_config_epoch)
+        
+        # Should have 3 epochs (91, 93, 101)
+        assert len(data_dict['epochs']) == 3, \
+            f"Expected 3 epochs after filtering, got {len(data_dict['epochs'])}"
     
     print("✓ Event filtering with epoching test passed")
     return True
