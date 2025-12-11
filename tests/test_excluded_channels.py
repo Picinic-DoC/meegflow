@@ -55,6 +55,7 @@ def test_steps_support_excluded_channels():
     steps_with_exclusion = [
         '_step_bandpass_filter',
         '_step_notch_filter',
+        '_step_interpolate_bad_channels',
         '_step_ica',
         '_step_find_flat_channels',
         '_step_find_bads_channels_threshold',
@@ -93,6 +94,7 @@ def test_steps_pass_excluded_channels_to_get_picks():
     steps_using_get_picks = [
         '_step_bandpass_filter',
         '_step_notch_filter',
+        '_step_ica',
         '_step_find_flat_channels',
         '_step_find_bads_channels_threshold',
         '_step_find_bads_channels_variance',
@@ -129,27 +131,6 @@ def test_steps_pass_excluded_channels_to_get_picks():
         print(f"✓ {step_name} passes excluded_channels to _get_picks")
 
 
-def test_ica_uses_apply_excluded_channels():
-    """Test that ICA step uses _apply_excluded_channels."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
-    with open(pipeline_file, 'r') as f:
-        code = f.read()
-    
-    pattern = "def _step_ica"
-    start_idx = code.find(pattern)
-    next_def = code.find("\n    def ", start_idx + len(pattern))
-    if next_def == -1:
-        next_def = len(code)
-    
-    function_code = code[start_idx:next_def]
-    
-    # ICA should use _apply_excluded_channels since it has its own pick_types call
-    assert "_apply_excluded_channels" in function_code, \
-        "ICA step does not use _apply_excluded_channels"
-    
-    print("✓ ICA step uses _apply_excluded_channels")
-
-
 def test_preprocessing_steps_report_excluded_channels():
     """Test that steps include excluded_channels in their preprocessing_steps report."""
     pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
@@ -159,6 +140,7 @@ def test_preprocessing_steps_report_excluded_channels():
     steps_to_check = [
         '_step_bandpass_filter',
         '_step_notch_filter',
+        '_step_interpolate_bad_channels',
         '_step_ica',
         '_step_find_flat_channels',
         '_step_find_bads_channels_threshold',
@@ -239,7 +221,6 @@ def test_steps_without_excluded_channels():
     # Steps that should NOT have excluded_channels
     steps_without_exclusion = [
         '_step_reference',  # Reference computation, handled differently
-        '_step_interpolate_bad_channels',  # Operates on bads only
         '_step_resample',  # Resamples all data
         '_step_set_montage',  # Sets positions for all channels
         '_step_drop_unused_channels',  # Explicit drop, not exclusion
@@ -280,7 +261,6 @@ def run_all_tests():
         test_get_picks_has_excluded_channels_param,
         test_steps_support_excluded_channels,
         test_steps_pass_excluded_channels_to_get_picks,
-        test_ica_uses_apply_excluded_channels,
         test_preprocessing_steps_report_excluded_channels,
         test_apply_excluded_channels_implementation,
         test_excluded_channels_documentation,

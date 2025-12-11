@@ -436,6 +436,7 @@ class EEGPreprocessingPipeline:
 
         data['preprocessing_steps'].append({
             'step': 'interpolate_bad_channels',
+            'excluded_channels': excluded_channels,
             'instance': instance
         })
 
