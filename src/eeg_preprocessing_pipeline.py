@@ -102,22 +102,80 @@ class EEGPreprocessingPipeline:
     
         return pipeline_steps
 
-    def _get_picks(self, info: mne.Info, picks_params: Any) -> List[int]:
+    def _apply_excluded_channels(self, info: mne.Info, picks: List[int], excluded_channels: List[str] = None) -> List[int]:
+        """
+        Auxiliary function to exclude specific channels from picks.
+        
+        This function allows excluding channels (e.g., reference channels like 'Cz') 
+        from analysis steps where it makes sense, to avoid reference problems.
+        
+        Parameters
+        ----------
+        info : mne.Info
+            MNE info object containing channel information
+        picks : list of int
+            Channel indices to filter
+        excluded_channels : list of str, optional
+            List of channel names to exclude from picks
+            
+        Returns
+        -------
+        picks : list of int
+            Filtered channel indices with excluded channels removed
+        """
+        if excluded_channels is None or len(excluded_channels) == 0:
+            return picks
+            
+        # Get channel names for the picks
+        ch_names = [info['ch_names'][pick] for pick in picks]
+        
+        # Filter out excluded channels
+        filtered_picks = [pick for pick, ch_name in zip(picks, ch_names) 
+                         if ch_name not in excluded_channels]
+        
+        logger.info(f"Excluding channels: {excluded_channels}. "
+                   f"Reduced from {len(picks)} to {len(filtered_picks)} channels.")
+        
+        return filtered_picks
+
+    def _get_picks(self, info: mne.Info, picks_params: Any, excluded_channels: List[str] = None) -> List[int]:
+        """
+        Get channel picks with optional exclusion of specific channels.
+        
+        Parameters
+        ----------
+        info : mne.Info
+            MNE info object containing channel information
+        picks_params : list, tuple, or None
+            Channel type specification (e.g., ['eeg'], ['eeg', 'eog'])
+        excluded_channels : list of str, optional
+            List of channel names to exclude from picks
+            
+        Returns
+        -------
+        picks : list of int
+            Channel indices, excluding 'bads' and any specified excluded_channels
+        """
         # Compute picks if provided, otherwise return all EEG channels
         if isinstance(picks_params, (list, tuple)):
-            return  mne.pick_types(
+            picks = mne.pick_types(
                 info,
                 exclude='bads',
                 **{ch_type: True for ch_type in picks_params}
-        )
+            )
+        else:
+            picks = mne.pick_types(
+                info,
+                exclude='bads',
+                eeg=True,
+                eog=False,
+                meg=False
+            )
         
-        return mne.pick_types(
-            info,
-            exclude='bads',
-            eeg=True,
-            eog=False,
-            meg=False
-        )
+        # Apply excluded_channels filter
+        picks = self._apply_excluded_channels(info, picks, excluded_channels)
+        
+        return picks
 
     def _step_strip_recording(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         
@@ -216,6 +274,7 @@ class EEGPreprocessingPipeline:
             raise ValueError("bandpass_filter requires 'raw' in data")
 
         picks_params = step_config.get('picks', None)
+        excluded_channels = step_config.get('excluded_channels', None)
         l_freq = step_config.get('l_freq', 0.5)
         l_freq_order = step_config.get('l_freq_order', 6)
         h_freq = step_config.get('h_freq', 45.0)
@@ -223,7 +282,7 @@ class EEGPreprocessingPipeline:
         n_jobs = step_config.get('n_jobs', 1)
 
         # Compute picks if provided, otherwise None (all channels)
-        picks = self._get_picks(data['raw'].info, picks_params)
+        picks = self._get_picks(data['raw'].info, picks_params, excluded_channels)
 
         # Apply filtering in 2 steps: high-pass and low-pass
         high_pass_filter_params = dict(
@@ -257,11 +316,13 @@ class EEGPreprocessingPipeline:
             {
                 'step': 'high_pass_filter',
                 'picks': picks_params,
+                'excluded_channels': excluded_channels,
                 'params': high_pass_filter_params
             },
             {
                 'step': 'low_pass_filter',
                 'picks': picks_params,
+                'excluded_channels': excluded_channels,
                 'params': low_pass_filter_params
             }
         ])
@@ -274,13 +335,14 @@ class EEGPreprocessingPipeline:
             raise ValueError("notch_filter requires 'raw' in data")
 
         picks_params = step_config.get('picks', None)
+        excluded_channels = step_config.get('excluded_channels', None)
         freqs = step_config.get('freqs', [50.0, 100.0])
         notch_widths = step_config.get('notch_widths', None)
         method = step_config.get('method', 'fft')
         n_jobs = step_config.get('n_jobs', 1)
 
         # Compute picks if provided
-        picks = self._get_picks(data['raw'].info, picks_params)
+        picks = self._get_picks(data['raw'].info, picks_params, excluded_channels)
 
         data['raw'].notch_filter(
             freqs=freqs,
@@ -294,6 +356,7 @@ class EEGPreprocessingPipeline:
         data['preprocessing_steps'].append({
             'step': 'notch_filter',
             'picks': picks_params,
+            'excluded_channels': excluded_channels,
             'freqs': freqs,
             'method': method,
             'notch_widths': notch_widths
@@ -382,6 +445,7 @@ class EEGPreprocessingPipeline:
         n_components = step_config.get('n_components', 20)
         random_state = step_config.get('random_state', 97)
         method = step_config.get('method', 'fastica')
+        excluded_channels = step_config.get('excluded_channels', None)
 
         ica = mne.preprocessing.ICA(
             n_components=n_components,
@@ -390,7 +454,10 @@ class EEGPreprocessingPipeline:
             max_iter='auto'
         )
         # Restrict picks to EEG channels only, if present
-        picks = mne.pick_types(data['raw'].info, eeg=True, eog=False, meg=False)
+        picks = mne.pick_types(data['raw'].info, eeg=True, eog=False, meg=False, exclude='bads')
+        # Apply channel exclusion if specified
+        picks = self._apply_excluded_channels(data['raw'].info, picks, excluded_channels)
+        
         ica.fit(data['raw'], picks=picks)
 
         # Automatically find and exclude artifacts
@@ -432,6 +499,7 @@ class EEGPreprocessingPipeline:
             'step': 'ica',
             'n_components': n_components,
             'method': method,
+            'excluded_channels': excluded_channels,
             'excluded_components': len(ica.exclude),
             'component_types': excluded_components,
             'apply': step_config.get('apply', True),
@@ -519,16 +587,21 @@ class EEGPreprocessingPipeline:
 
     def _step_find_flat_channels(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         if 'raw' not in data:
-            raise ValueError("bandpass_filter requires 'raw' in data")
+            raise ValueError("find_flat_channels requires 'raw' in data")
 
         picks_params = step_config.get('picks', None)
+        excluded_channels = step_config.get('excluded_channels', None)
         threshold = step_config.get('threshold', 1e-12)
-        # TODO: implement picks
-        #picks = self._get_picks(data[].info, picks_params)
+        
+        # Get picks with exclusions
+        picks = self._get_picks(data['raw'].info, picks_params, excluded_channels)
 
-        variances = data['raw'].get_data().var(axis=1)
+        # Get data only for selected picks
+        raw_data = data['raw'].get_data(picks=picks)
+        variances = raw_data.var(axis=1)
         flat_idx = np.where(variances < threshold)[0]
-        flat_chs = [data['raw'].ch_names[i] for i in flat_idx]
+        # Map back to channel names using picks
+        flat_chs = [data['raw'].ch_names[picks[i]] for i in flat_idx]
         
         if flat_chs:
             data['raw'].info['bads'].extend([ch for ch in flat_chs if ch not in data['raw'].info['bads']])
@@ -537,6 +610,7 @@ class EEGPreprocessingPipeline:
             'step': 'find_flat_channels',
             'instance': 'raw',
             'picks': picks_params,
+            'excluded_channels': excluded_channels,
             'apply_on': ['raw'],
             'threshold': threshold,
             'bad_channels': flat_chs,
@@ -551,6 +625,7 @@ class EEGPreprocessingPipeline:
             raise ValueError("find_bads_channels_threshold requires 'epochs' in data")
 
         picks_params = step_config.get('picks', None)
+        excluded_channels = step_config.get('excluded_channels', None)
         reject = step_config.get('reject', {'eeg': 100e-6})
         n_epochs_bad_ch = step_config.get('n_epochs_bad_ch', 0.5)
         apply_on = step_config.get('apply_on', ['epochs'])
@@ -561,7 +636,7 @@ class EEGPreprocessingPipeline:
         if any(inst not in data for inst in apply_on):
             raise ValueError(f"find_bads_channels_threshold requires all instances of apply_on ({apply_on}) to be present in data")
 
-        picks = self._get_picks(data['epochs'].info, picks_params)
+        picks = self._get_picks(data['epochs'].info, picks_params, excluded_channels)
 
         bad_chs = adaptive_reject.find_bads_channels_threshold(
             data['epochs'], picks, reject, n_epochs_bad_ch
@@ -574,6 +649,7 @@ class EEGPreprocessingPipeline:
         data['preprocessing_steps'].append({
             'step': 'find_bads_channels_threshold',
             'picks': picks_params,
+            'excluded_channels': excluded_channels,
             'apply_on': apply_on,
             'reject': reject,
             'n_epochs_bad_ch': n_epochs_bad_ch,
@@ -591,6 +667,7 @@ class EEGPreprocessingPipeline:
             raise ValueError(f"find_bads_channels_variance requires '{instance}' in data")
 
         picks_params = step_config.get('picks', None)
+        excluded_channels = step_config.get('excluded_channels', None)
         zscore_thresh = step_config.get('zscore_thresh', 4)
         max_iter = step_config.get('max_iter', 2)
         apply_on = step_config.get('apply_on', [instance])
@@ -601,7 +678,7 @@ class EEGPreprocessingPipeline:
         if any(inst not in data for inst in apply_on):
             raise ValueError(f"find_bads_channels_threshold requires all instances of apply_on ({apply_on}) to be present in data")
 
-        picks = self._get_picks(data[instance].info, picks_params)
+        picks = self._get_picks(data[instance].info, picks_params, excluded_channels)
 
         bad_chs = adaptive_reject.find_bads_channels_variance(
             data[instance], picks, zscore_thresh, max_iter
@@ -618,6 +695,7 @@ class EEGPreprocessingPipeline:
             'step': 'find_bads_channels_variance',
             'instance': instance,
             'picks': picks_params,
+            'excluded_channels': excluded_channels,
             'apply_on': apply_on,
             'zscore_thresh': zscore_thresh,
             'max_iter': max_iter,
@@ -635,6 +713,7 @@ class EEGPreprocessingPipeline:
             raise ValueError(f"find_bads_channels_high_frequency requires '{instance}' in data")
 
         picks_params = step_config.get('picks', None)
+        excluded_channels = step_config.get('excluded_channels', None)
         zscore_thresh = step_config.get('zscore_thresh', 4)
         max_iter = step_config.get('max_iter', 2)
         apply_on = step_config.get('apply_on', [instance])
@@ -645,7 +724,7 @@ class EEGPreprocessingPipeline:
         if any(inst not in data for inst in apply_on):
             raise ValueError(f"find_bads_channels_threshold requires all instances of apply_on ({apply_on}) to be present in data")
 
-        picks = self._get_picks(data[instance].info, picks_params)
+        picks = self._get_picks(data[instance].info, picks_params, excluded_channels)
 
         bad_chs = adaptive_reject.find_bads_channels_high_frequency(
             data[instance], picks, zscore_thresh, max_iter
@@ -660,6 +739,7 @@ class EEGPreprocessingPipeline:
             'step': 'find_bads_channels_high_frequency',
             'instance': instance,
             'picks': picks_params,
+            'excluded_channels': excluded_channels,
             'apply_on': apply_on,
             'zscore_thresh': zscore_thresh,
             'max_iter': max_iter,
@@ -675,10 +755,11 @@ class EEGPreprocessingPipeline:
             raise ValueError("find_bads_epochs_threshold requires 'epochs' in data")
 
         picks_params = step_config.get('picks', None)
+        excluded_channels = step_config.get('excluded_channels', None)
         reject = step_config.get('reject', {'eeg': 100e-6})
         n_channels_bad_epoch = step_config.get('n_channels_bad_epoch', 0.1)
 
-        picks = self._get_picks(data['epochs'].info, picks_params)
+        picks = self._get_picks(data['epochs'].info, picks_params, excluded_channels)
 
         bad_epochs = adaptive_reject.find_bads_epochs_threshold(
             data['epochs'], picks, reject, n_channels_bad_epoch
@@ -691,6 +772,7 @@ class EEGPreprocessingPipeline:
         data['preprocessing_steps'].append({
             'step': 'find_bads_epochs_threshold',
             'picks': picks_params,
+            'excluded_channels': excluded_channels,
             'apply_on': ['epochs'], # only for compatibility with others reject steps
             'reject': reject,
             'n_channels_bad_epoch': n_channels_bad_epoch,
