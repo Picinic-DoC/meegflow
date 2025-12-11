@@ -55,17 +55,28 @@ def test_pipeline_has_required_methods():
     
     # Check for auxiliary step functions (new modular design)
     required_methods = [
-        "_step_load_data",
+        "_step_strip_recording",
+        "_step_concatenate_recordings",
+        "_step_set_montage",
+        "_step_drop_unused_channels",
         "_step_bandpass_filter",
         "_step_notch_filter",
+        "_step_resample",
         "_step_reference",
+        "_step_interpolate_bad_channels",
         "_step_ica",
         "_step_find_events",
         "_step_epoch",
+        "_step_chunk_in_epoch",
+        "_step_find_flat_channels",
+        "_step_find_bads_channels_threshold",
+        "_step_find_bads_channels_variance",
+        "_step_find_bads_channels_high_frequency",
+        "_step_find_bads_epochs_threshold",
         "_step_save_clean_instance",
         "_step_generate_json_report",
         "_step_generate_html_report",
-        "run_pipeline"
+        "run_pipeline",
     ]
     
     for method in required_methods:

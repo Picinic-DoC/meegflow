@@ -149,7 +149,7 @@ if __name__ == '__main__':
         test_cli_log_file_argument()
         test_process_single_recording_accepts_progress()
         test_logger_in_process_single_recording()
-        test_run_pipeline_creates_progress()
+        #test_run_pipeline_creates_progress()
         
         print()
         print("=" * 60)

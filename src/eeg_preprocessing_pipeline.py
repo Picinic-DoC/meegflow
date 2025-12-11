@@ -980,7 +980,7 @@ class EEGPreprocessingPipeline:
         acquisitions: Union[str, List[str]] = None,
         extension: str = '.vhdr'
     ) -> Dict[str, Any]:
-        """Run the pipeline using mne-bids find_matching_paths to query files.
+        """Run the pipeline using mne-bids to query files.
 
         Parameters
         ----------
