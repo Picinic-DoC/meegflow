@@ -592,6 +592,34 @@ class EEGPreprocessingPipeline:
         return data
 
     def _step_find_flat_channels(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Find flat channels based on variance threshold.
+        
+        Flat channels often indicate disconnected electrodes or other hardware issues.
+        Channels with variance below the threshold are marked as bad.
+        
+        Parameters (via step_config)
+        -----------------------------
+        picks : list, optional
+            Channel types to analyze (default: all EEG channels)
+        excluded_channels : list, optional
+            Channel names to exclude from analysis (e.g., reference channels)
+        threshold : float, optional
+            Variance threshold below which channels are considered flat
+            (default: 1e-12)
+        
+        Updates
+        -------
+        data['raw'].info['bads'] : list
+            Adds detected flat channels (without duplicates)
+        data['preprocessing_steps'] : list
+            Appends step information including detected bad channels
+        
+        Returns
+        -------
+        data : dict
+            Updated data dictionary with flat channels marked as bad
+        """
         if 'raw' not in data:
             raise ValueError("find_flat_channels requires 'raw' in data")
 
