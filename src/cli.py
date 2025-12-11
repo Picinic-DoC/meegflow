@@ -48,6 +48,36 @@ def _parse_args():
         help='Run number(s) to process.'
     )
     parser.add_argument(
+        '--processings',
+        nargs='+',
+        required=False,
+        help='Processing label(s) to process.'
+    )
+    parser.add_argument(
+        '--recordings',
+        nargs='+',
+        required=False,
+        help='Recording name(s) to process.'
+    )
+    parser.add_argument(
+        '--spaces',
+        nargs='+',
+        required=False,
+        help='Coordinate space(s) to process.'
+    )
+    parser.add_argument(
+        '--splits',
+        nargs='+',
+        required=False,
+        help='Split(s) of continuous recording to process.'
+    )
+    parser.add_argument(
+        '--descriptions',
+        nargs='+',
+        required=False,
+        help='Description(s) for derivative data to process.'
+    )
+    parser.add_argument(
         '--extension',
         type=str,
         default='.vhdr',
@@ -90,6 +120,12 @@ def main():
         sessions=args.sessions,
         tasks=args.tasks,
         acquisitions=args.acquisitions,
+        runs=args.runs,
+        processings=args.processings,
+        recordings=args.recordings,
+        spaces=args.spaces,
+        splits=args.splits,
+        descriptions=args.descriptions,
         extension=args.extension,
     )
 
