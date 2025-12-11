@@ -459,7 +459,9 @@ class EEGPreprocessingPipeline:
 
         data['preprocessing_steps'].append({
             'step': 'find_events',
-            'n_events': len(events)
+            'found_event_id': found_event_id,
+            'found_evends': data['events'],
+            'n_events': data['events'].shape[0]
         })
 
         return data
