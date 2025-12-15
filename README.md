@@ -19,6 +19,28 @@ A modular, configuration-driven EEG preprocessing pipeline using MNE-BIDS. The p
 
 ## Installation
 
+### Option 1: Docker (Recommended)
+
+Using Docker is the easiest way to get started, as it includes all dependencies and system libraries.
+
+1. Build the Docker image:
+```bash
+git clone https://github.com/Laouen/nice-preprocessing.git
+cd nice-preprocessing
+docker build -t nice-preprocessing .
+```
+
+2. Run the container:
+```bash
+docker run --rm -v /path/to/bids/data:/data nice-preprocessing \
+    --bids-root /data \
+    --subjects 01 02 \
+    --tasks rest \
+    --config /app/configs/config_example.yaml
+```
+
+### Option 2: Local Installation
+
 1. Clone this repository:
 ```bash
 git clone https://github.com/Laouen/nice-preprocessing.git
@@ -37,7 +59,56 @@ pip install -e .
 
 ## Usage
 
-### Process Multiple Subjects
+### Using Docker
+
+To use the Docker image, mount your BIDS dataset directory to `/data` in the container. The outputs will be written to the `derivatives/nice_preprocessing` subdirectory within your BIDS root.
+
+**Basic usage:**
+```bash
+docker run --rm \
+    -v /path/to/bids:/data \
+    nice-preprocessing \
+    --bids-root /data \
+    --tasks rest
+```
+
+**With custom configuration:**
+```bash
+docker run --rm \
+    -v /path/to/bids:/data \
+    -v /path/to/custom/config.yaml:/config.yaml \
+    nice-preprocessing \
+    --bids-root /data \
+    --subjects 01 02 03 \
+    --tasks rest \
+    --config /config.yaml
+```
+
+**With log file output:**
+```bash
+docker run --rm \
+    -v /path/to/bids:/data \
+    -v /path/to/logs:/logs \
+    nice-preprocessing \
+    --bids-root /data \
+    --tasks rest \
+    --log-file /logs/pipeline.log
+```
+
+**Processing specific sessions:**
+```bash
+docker run --rm \
+    -v /path/to/bids:/data \
+    nice-preprocessing \
+    --bids-root /data \
+    --subjects 01 02 \
+    --sessions 01 02 \
+    --tasks rest
+```
+
+### Using Local Installation
+
+#### Process Multiple Subjects
 
 Run the preprocessing pipeline on multiple subjects:
 
@@ -76,7 +147,7 @@ python src/cli.py \
     --tasks rest task1 task2
 ```
 
-### Python API Usage
+#### Python API Usage
 
 You can also use the pipeline directly in Python:
 
@@ -529,6 +600,63 @@ python src/cli.py \
 Available log levels: `DEBUG`, `INFO` (default), `WARNING`, `ERROR`
 
 The pipeline also saves a summary of results to `derivatives/nice_preprocessing/pipeline_results.json` for easy programmatic access.
+
+## Docker Notes
+
+### Volume Mounting
+
+When using Docker, you need to mount your local directories to paths inside the container using the `-v` flag:
+
+- **BIDS dataset**: Mount your BIDS root directory to `/data` or any path you specify with `--bids-root`
+- **Configuration files**: Mount custom config files if not using the built-in configs in `/app/configs/`
+- **Output directory**: The pipeline writes outputs to `<bids-root>/derivatives/nice_preprocessing/` by default
+- **Log files**: If using `--log-file`, mount a directory for log output
+
+### File Permissions
+
+The Docker container runs as root by default. Files created by the container will be owned by root. To avoid permission issues:
+
+1. Run with your user ID:
+```bash
+docker run --rm --user $(id -u):$(id -g) \
+    -v /path/to/bids:/data \
+    nice-preprocessing \
+    --bids-root /data \
+    --tasks rest
+```
+
+2. Or fix permissions after processing:
+```bash
+sudo chown -R $USER:$USER /path/to/bids/derivatives
+```
+
+### Using Built-in Configurations
+
+The Docker image includes several pre-configured pipeline examples in `/app/configs/`:
+- `/app/configs/config_example.yaml` - Standard pipeline with epochs
+- `/app/configs/config_raw_only.yaml` - Raw data processing without epoching
+- `/app/configs/config_with_adaptive_reject.yaml` - Advanced pipeline with adaptive artifact rejection
+- `/app/configs/config_minimal.yaml` - Minimal preprocessing steps
+
+Example using a built-in config:
+```bash
+docker run --rm \
+    -v /path/to/bids:/data \
+    nice-preprocessing \
+    --bids-root /data \
+    --tasks rest \
+    --config /app/configs/config_with_adaptive_reject.yaml
+```
+
+### Building from Source
+
+If you want to customize the Docker image or use a development version:
+
+```bash
+git clone https://github.com/Laouen/nice-preprocessing.git
+cd nice-preprocessing
+docker build -t nice-preprocessing:custom .
+```
 
 ## Requirements
 
