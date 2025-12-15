@@ -4,6 +4,9 @@ FROM python:3.10-slim
 # Set working directory in container
 WORKDIR /app
 
+# Build argument for trusted hosts (useful in CI/CD environments with self-signed certs)
+ARG PIP_TRUSTED_HOST=""
+
 # Install system dependencies required by MNE and other packages
 RUN apt-get update && apt-get install -y \
     git \
@@ -19,14 +22,21 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 
 # Install Python dependencies
-# Note: In production, SSL verification should be enabled
-RUN pip install --no-cache-dir --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r requirements.txt
+RUN if [ -n "$PIP_TRUSTED_HOST" ]; then \
+        pip install --no-cache-dir --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r requirements.txt; \
+    else \
+        pip install --no-cache-dir -r requirements.txt; \
+    fi
 
 # Copy the entire project
 COPY . .
 
 # Install the package
-RUN pip install --no-cache-dir --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -e .
+RUN if [ -n "$PIP_TRUSTED_HOST" ]; then \
+        pip install --no-cache-dir --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -e .; \
+    else \
+        pip install --no-cache-dir -e .; \
+    fi
 
 # Set the entrypoint to the CLI command
 ENTRYPOINT ["eeg-preprocess"]

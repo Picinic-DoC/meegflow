@@ -658,6 +658,16 @@ cd nice-preprocessing
 docker build -t nice-preprocessing:custom .
 ```
 
+**Building in CI/CD environments with self-signed certificates:**
+
+If you're building in a CI/CD environment with self-signed SSL certificates, use the `PIP_TRUSTED_HOST` build argument:
+
+```bash
+docker build --build-arg PIP_TRUSTED_HOST=1 -t nice-preprocessing:custom .
+```
+
+Note: This disables SSL verification for PyPI and should only be used in trusted CI/CD environments, not for production builds.
+
 ## Requirements
 
 - Python >= 3.8
