@@ -163,7 +163,6 @@ def test_preprocessing_steps_table_generation():
         assert 'step-details' in html_content, "Step details div not found"
         
         # Check that step names are present
-        assert 'load_data' in html_content, "load_data step not found"
         assert 'bandpass_filter' in html_content, "bandpass_filter step not found"
         assert 'reference' in html_content, "reference step not found"
         

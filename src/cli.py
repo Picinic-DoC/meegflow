@@ -1,9 +1,55 @@
 #!/usr/bin/env python3
 """
-Command-line interface for the EEG preprocessing pipeline.
+Command-Line Interface for EEG Preprocessing Pipeline.
 
-This module provides CLI commands for running the EEG preprocessing pipeline
-from the command line.
+This module provides a command-line interface for running the EEG preprocessing
+pipeline on BIDS-formatted datasets. It handles argument parsing, logging configuration,
+and pipeline execution.
+
+Main Functions
+--------------
+main() : Entry point for the CLI
+    Parses command-line arguments, configures logging, initializes the pipeline,
+    and executes preprocessing on specified subjects/sessions/tasks.
+
+_parse_args() : Argument parser
+    Defines and parses all command-line arguments including:
+    - BIDS dataset location
+    - Subject/session/task filters
+    - Configuration file path
+    - Logging options
+
+Command-Line Usage
+------------------
+Basic usage:
+    python src/cli.py --bids-root /path/to/bids --config config.yaml
+
+With subject and task filtering:
+    python src/cli.py --bids-root /path/to/bids --subjects 01 02 --tasks rest
+
+With logging to file:
+    python src/cli.py --bids-root /path/to/bids --log-file pipeline.log --log-level DEBUG
+
+Available Arguments
+-------------------
+Required:
+  --bids-root        Path to BIDS root directory
+
+Optional filters (if not specified, all matching files are processed):
+  --subjects         Subject ID(s) to process
+  --sessions         Session ID(s) to process
+  --tasks            Task name(s) to process
+  --acquisitions     Acquisition parameter(s) to process
+  --runs             Run number(s) to process
+  --extension        File extension (default: .vhdr)
+
+Other options:
+  --output-root      Custom output path (default: bids-root/derivatives/nice-preprocessing)
+  --config           Path to YAML configuration file
+  --log-file         Path to log file (default: console output)
+  --log-level        Logging level: DEBUG, INFO, WARNING, ERROR (default: INFO)
+
+See README.md for detailed examples and documentation.
 """
 import argparse
 import json

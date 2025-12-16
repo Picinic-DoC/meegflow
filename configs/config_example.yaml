@@ -1,5 +1,4 @@
 pipeline:
-  - name: load_data
   - name: bandpass_filter
     l_freq: 0.5
     h_freq: 40.0

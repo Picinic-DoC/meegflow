@@ -1,9 +1,84 @@
 #!/usr/bin/env python3
 """
-EEG preprocessing pipeline using MNE-BIDS.
+EEG Preprocessing Pipeline using MNE-BIDS.
 
-This version is modular with separate functions for each preprocessing step.
-The pipeline is configuration-driven - you specify steps, their order, and parameters.
+This module provides a modular, configuration-driven EEG preprocessing pipeline.
+Each preprocessing step is a separate method that can be customized and combined
+through a YAML configuration file.
+
+Main Components
+---------------
+- EEGPreprocessingPipeline: Core pipeline class
+  - Processes EEG data from BIDS datasets
+  - Executes configurable preprocessing steps
+  - Generates JSON and HTML reports
+  - Supports batch processing of multiple subjects/sessions
+
+Configuration
+-------------
+The pipeline is driven by YAML configuration files that specify:
+- List of preprocessing steps to execute
+- Parameters for each step
+- Order of execution
+
+Available Steps
+---------------
+Data I/O and Setup:
+  - set_montage: Set electrode positions
+  - drop_unused_channels: Remove specific channels
+
+Filtering:
+  - bandpass_filter: Apply high-pass and low-pass filters
+  - notch_filter: Remove line noise
+
+Preprocessing:
+  - resample: Change sampling frequency
+  - reference: Apply re-referencing
+  - ica: ICA-based artifact removal
+
+Bad Channel Detection:
+  - find_flat_channels: Detect flat/disconnected channels
+  - find_bads_channels_threshold: Threshold-based bad channel detection
+  - find_bads_channels_variance: Variance-based detection
+  - find_bads_channels_high_frequency: High-frequency noise detection
+
+Bad Channel Handling:
+  - interpolate_bad_channels: Repair bad channels via interpolation
+  - drop_bad_channels: Remove bad channels permanently
+
+Epoching:
+  - find_events: Extract events from data
+  - epoch: Create epochs around events
+  - chunk_in_epoch: Create fixed-length epochs
+  - find_bads_epochs_threshold: Detect and remove bad epochs
+
+Output:
+  - save_clean_instance: Save preprocessed data to .fif
+  - generate_json_report: Create JSON report
+  - generate_html_report: Create interactive HTML report
+
+Usage Example
+-------------
+```python
+from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+import yaml
+
+# Load configuration
+with open('config.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+
+# Initialize and run pipeline
+pipeline = EEGPreprocessingPipeline(
+    bids_root='/path/to/bids',
+    config=config
+)
+results = pipeline.run_pipeline(
+    subjects=['01', '02'],
+    tasks='rest'
+)
+```
+
+See README.md for detailed documentation and examples.
 """
 from itertools import product
 from pathlib import Path
@@ -92,14 +167,10 @@ class EEGPreprocessingPipeline:
         pipeline_steps = self.config.get('pipeline', [])
 
         if not pipeline_steps:
-            pipeline_steps = [
-                {'name': 'load_data'},
-                {'name': 'bandpass_filter', 'l_freq': 0.5, 'h_freq': 45.0},
-                {'name': 'reference', 'type': 'average'},
-                {'name': 'save_clean_instance', 'instance': 'epochs'},
-                {'name': 'generate_json_report'},
-                {'name': 'generate_html_report'},
-            ]
+            raise ValueError(
+                "No pipeline steps provided in configuration. "
+                "Please specify a 'pipeline' list in your config file with at least one preprocessing step."
+            )
     
         return pipeline_steps
 
@@ -237,6 +308,31 @@ class EEGPreprocessingPipeline:
         return data
 
     def _step_set_montage(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Set channel montage for EEG data.
+        
+        Useful when data lacks electrode position information. Sets standard electrode
+        positions based on the specified montage.
+        
+        Parameters (via step_config)
+        -----------------------------
+        montage : str, optional
+            Name of standard montage to use (default: 'standard_1020').
+            Examples: 'standard_1020', 'standard_1005', 'biosemi64', etc.
+            See MNE documentation for available montages.
+        
+        Updates
+        -------
+        data['raw'] : mne.io.Raw
+            Electrode positions are set based on the montage
+        data['preprocessing_steps'] : list
+            Appends step information
+        
+        Returns
+        -------
+        data : dict
+            Updated data dictionary with montage set
+        """
         if 'raw' not in data:
             raise ValueError("set_montage requires 'raw' in data")
 
@@ -252,7 +348,32 @@ class EEGPreprocessingPipeline:
         return data
 
     def _step_drop_unused_channels(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Drop unused channels from the data."""
+        """
+        Drop unused channels from the data.
+        
+        This step explicitly removes specified channels from the dataset.
+        Different from drop_bad_channels, this step drops channels by name
+        regardless of whether they are marked as bad.
+        
+        Parameters (via step_config)
+        -----------------------------
+        channels_to_drop : list of str
+            List of channel names to drop from the data
+        instance : str, optional
+            Which data instance to drop channels from - 'raw' or 'epochs' (default: 'raw')
+        
+        Updates
+        -------
+        data[instance] : mne.io.Raw or mne.Epochs
+            Specified channels are removed from the data
+        data['preprocessing_steps'] : list
+            Appends step information including list of dropped channels
+        
+        Returns
+        -------
+        data : dict
+            Updated data dictionary with specified channels removed
+        """
         channels_to_drop = step_config.get('channels_to_drop', [])
         instance = step_config.get('instance', 'raw') 
 
@@ -270,7 +391,40 @@ class EEGPreprocessingPipeline:
         return data
 
     def _step_bandpass_filter(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply bandpass filtering."""
+        """
+        Apply bandpass filtering.
+        
+        Applies both high-pass and low-pass filters using IIR Butterworth filters.
+        
+        Parameters (via step_config)
+        -----------------------------
+        l_freq : float, optional
+            High-pass filter frequency in Hz (default: 0.5)
+        h_freq : float, optional
+            Low-pass filter frequency in Hz (default: 45.0)
+        l_freq_order : int, optional
+            Filter order for high-pass filter (default: 6)
+        h_freq_order : int, optional
+            Filter order for low-pass filter (default: 8)
+        picks : list, optional
+            Channel types to filter (e.g., ['eeg']). If None, defaults to EEG channels.
+        excluded_channels : list of str, optional
+            Channel names to exclude from filtering (e.g., reference channels)
+        n_jobs : int, optional
+            Number of parallel jobs (default: 1)
+        
+        Updates
+        -------
+        data['raw'] : mne.io.Raw
+            Filters applied in-place
+        data['preprocessing_steps'] : list
+            Appends step information for both high-pass and low-pass filters
+        
+        Returns
+        -------
+        data : dict
+            Updated data dictionary with filtered raw data
+        """
         if 'raw' not in data:
             raise ValueError("bandpass_filter requires 'raw' in data")
 
@@ -331,7 +485,39 @@ class EEGPreprocessingPipeline:
         return data
 
     def _step_notch_filter(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply notch filtering."""
+        """
+        Apply notch filtering to remove line noise.
+        
+        Removes power line interference at specified frequencies (e.g., 50 Hz or 60 Hz
+        and their harmonics).
+        
+        Parameters (via step_config)
+        -----------------------------
+        freqs : list of float
+            Frequencies to notch filter in Hz (e.g., [50.0, 100.0])
+        notch_widths : float or list, optional
+            Width of notch filters. If None, uses MNE default.
+        method : str, optional
+            Filtering method (default: 'fft')
+        picks : list, optional
+            Channel types to filter. If None, defaults to EEG channels.
+        excluded_channels : list of str, optional
+            Channel names to exclude from filtering
+        n_jobs : int, optional
+            Number of parallel jobs (default: 1)
+        
+        Updates
+        -------
+        data['raw'] : mne.io.Raw
+            Notch filters applied in-place
+        data['preprocessing_steps'] : list
+            Appends step information
+        
+        Returns
+        -------
+        data : dict
+            Updated data dictionary with notch-filtered raw data
+        """
         if 'raw' not in data:
             raise ValueError("notch_filter requires 'raw' in data")
 
@@ -423,7 +609,32 @@ class EEGPreprocessingPipeline:
         return data
 
     def _step_interpolate_bad_channels(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Interpolate bad channels."""
+        """
+        Interpolate bad channels using spherical spline interpolation.
+        
+        Repairs bad channels by interpolating their values from neighboring channels.
+        After interpolation, the channels are removed from the info['bads'] list.
+        
+        Parameters (via step_config)
+        -----------------------------
+        instance : str, optional
+            Which data instance to interpolate - 'raw' or 'epochs' (default: 'epochs')
+        excluded_channels : list of str, optional
+            Channel names to exclude from interpolation even if marked as bad.
+            These channels will remain in info['bads'] after interpolation.
+        
+        Updates
+        -------
+        data[instance] : mne.io.Raw or mne.Epochs
+            Bad channels (except excluded ones) are interpolated and removed from info['bads']
+        data['preprocessing_steps'] : list
+            Appends step information
+        
+        Returns
+        -------
+        data : dict
+            Updated data dictionary with bad channels interpolated
+        """
         instance = step_config.get('instance', 'epochs')
         excluded_channels = step_config.get('excluded_channels', None)
 
@@ -444,7 +655,32 @@ class EEGPreprocessingPipeline:
         return data
 
     def _step_drop_bad_channels(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Drop bad channels without interpolation."""
+        """
+        Drop bad channels without interpolation.
+        
+        This step removes channels marked as bad from the data instead of interpolating them.
+        Useful when you want to permanently remove problematic channels from the dataset.
+        
+        Parameters (via step_config)
+        -----------------------------
+        instance : str, optional
+            Which data instance to drop channels from - 'raw' or 'epochs' (default: 'epochs')
+        excluded_channels : list of str, optional
+            List of channel names to exclude from dropping even if marked as bad.
+            These channels will remain in the data even if they are in info['bads'].
+        
+        Updates
+        -------
+        data[instance] : mne.io.Raw or mne.Epochs
+            Channels marked as bad (except excluded ones) are removed from the data
+        data['preprocessing_steps'] : list
+            Appends step information including list of dropped channels
+        
+        Returns
+        -------
+        data : dict
+            Updated data dictionary with bad channels removed
+        """
         instance = step_config.get('instance', 'epochs')
         excluded_channels = step_config.get('excluded_channels', None)
 
@@ -481,7 +717,47 @@ class EEGPreprocessingPipeline:
         return data
 
     def _step_ica(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply ICA for artifact removal."""
+        """
+        Apply Independent Component Analysis (ICA) for artifact removal.
+        
+        Decomposes the signal into independent components and can automatically
+        detect and remove EOG and ECG artifacts.
+        
+        Parameters (via step_config)
+        -----------------------------
+        n_components : int, optional
+            Number of ICA components (default: 20)
+        method : str, optional
+            ICA method: 'fastica', 'infomax', or 'picard' (default: 'fastica')
+        random_state : int, optional
+            Random state for reproducibility (default: 97)
+        picks : list, optional
+            Channel types to include in ICA. If None, defaults to EEG channels.
+        excluded_channels : list of str, optional
+            Channel names to exclude from ICA decomposition
+        find_eog : bool, optional
+            Automatically find and exclude EOG artifacts (default: False)
+        find_ecg : bool, optional
+            Automatically find and exclude ECG artifacts (default: False)
+        selected_indices : list of int, optional
+            Manually specify component indices to exclude
+        apply : bool, optional
+            Apply ICA to remove artifacts (default: True)
+        
+        Updates
+        -------
+        data['ica'] : mne.preprocessing.ICA
+            Fitted ICA object (stored for optional visualization)
+        data['raw'] : mne.io.Raw
+            If apply=True, artifacts are removed from raw data
+        data['preprocessing_steps'] : list
+            Appends step information including excluded components
+        
+        Returns
+        -------
+        data : dict
+            Updated data dictionary with ICA applied
+        """
         if 'raw' not in data:
             raise ValueError("ica step requires 'raw' in data")
 
@@ -958,7 +1234,17 @@ class EEGPreprocessingPipeline:
 
         picks_params = step_config.get('picks', None)
         excluded_channels = step_config.get('excluded_channels', None)
-        picks = self._get_picks(data['epochs'].info, picks_params, excluded_channels)
+        
+        # Get info from epochs if available, otherwise from raw
+        info = None
+        if 'epochs' in data and data['epochs'] is not None:
+            info = data['epochs'].info
+        elif 'raw' in data and data['raw'] is not None:
+            info = data['raw'].info
+        else:
+            raise ValueError("generate_html_report requires either 'raw' or 'epochs' in data")
+        
+        picks = self._get_picks(info, picks_params, excluded_channels)
         plot_raw_kwargs = step_config.get('plot_raw_kwargs', {})
         plot_ica_kwargs = step_config.get('plot_ica_kwargs', {})
         plot_events_kwargs = step_config.get('plot_events_kwargs', {})

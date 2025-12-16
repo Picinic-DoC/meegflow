@@ -147,11 +147,12 @@ The pipeline is configuration-driven. You define a list of preprocessing steps, 
 ### Available Steps
 
 - **set_montage**: Set channel montage for EEG data
-- **load_data**: Load raw data into memory
+- **drop_unused_channels**: Explicitly drop specified channels by name
 - **bandpass_filter**: Apply bandpass filtering
 - **notch_filter**: Apply notch filtering
 - **resample**: Resample data to different sampling frequency
 - **reference**: Apply re-referencing
+- **find_flat_channels**: Find flat/disconnected channels based on variance
 - **interpolate_bad_channels**: Interpolate bad channels
 - **drop_bad_channels**: Drop bad channels without interpolation
 - **ica**: ICA-based artifact removal
@@ -171,7 +172,6 @@ See `configs/config_example.yaml` for a full pipeline with epochs:
 
 ```yaml
 pipeline:
-  - name: load_data
   - name: bandpass_filter
     l_freq: 0.5
     h_freq: 40.0
@@ -203,7 +203,6 @@ See `configs/config_raw_only.yaml` for a simpler pipeline without epoching:
 
 ```yaml
 pipeline:
-  - name: load_data
   - name: bandpass_filter
     l_freq: 1.0
     h_freq: 30.0
@@ -223,7 +222,6 @@ See `configs/config_with_adaptive_reject.yaml` for a pipeline with adaptive auto
 pipeline:
   - name: set_montage
     montage: standard_1020
-  - name: load_data
   - name: bandpass_filter
     l_freq: 0.5
     h_freq: 45.0
@@ -345,8 +343,10 @@ Set channel montage for EEG data. Useful when data lacks electrode position info
   - Examples: 'standard_1020', 'standard_1005', 'biosemi64', etc.
   - See MNE documentation for available montages
 
-### 2. load_data
-Loads raw data into memory. No parameters needed.
+### 2. drop_unused_channels
+Explicitly drop specified channels from the data by name. Different from drop_bad_channels, this drops channels regardless of whether they're marked as bad.
+- `channels_to_drop`: List of channel names to drop
+- `instance`: Which data instance to drop channels from - 'raw' or 'epochs' (default: 'raw')
 
 ### 3. bandpass_filter
 Apply bandpass filtering.
@@ -380,17 +380,23 @@ Apply re-referencing.
 - `ref_channels`: Reference channels ('average' or channel names)
 - `instance`: Which data instance to reference - 'raw' or 'epochs' (default: 'epochs')
 
-### 7. interpolate_bad_channels
+### 7. find_flat_channels
+Find flat/disconnected channels based on variance threshold. Channels with variance below the threshold are marked as bad.
+- `picks`: Channel indices to check (optional, default: EEG channels)
+- `excluded_channels`: List of channel names to exclude from flat channel detection (optional)
+- `threshold`: Variance threshold below which channels are considered flat (default: 1e-12)
+
+### 8. interpolate_bad_channels
 Interpolate bad channels using spherical spline interpolation.
 - `instance`: Which data instance to interpolate - 'raw' or 'epochs' (default: 'epochs')
 - `excluded_channels`: List of channel names to exclude from interpolation (optional)
 
-### 8. drop_bad_channels
+### 9. drop_bad_channels
 Drop bad channels without interpolation. This step removes channels marked as bad from the data instead of interpolating them.
 - `instance`: Which data instance to drop channels from - 'raw' or 'epochs' (default: 'epochs')
 - `excluded_channels`: List of channel names to exclude from dropping even if marked as bad (optional)
 
-### 9. ica
+### 10. ica
 ICA-based artifact removal.
 - `n_components`: Number of ICA components (default: 20)
 - `method`: ICA method ('fastica', 'infomax', 'picard', default: 'fastica')
@@ -400,11 +406,11 @@ ICA-based artifact removal.
 - `find_ecg`: Automatically find ECG artifacts (true/false, default: false)
 - `apply`: Apply ICA to remove artifacts (true/false, default: true)
 
-### 10. find_events
+### 11. find_events
 Find events in the data.
 - `shortest_event`: Minimum event duration in samples (default: 1)
 
-### 11. epoch
+### 12. epoch
 Create epochs around events.
 - `tmin`: Start time before event (seconds, default: -0.2)
 - `tmax`: End time after event (seconds, default: 0.5)
@@ -412,7 +418,7 @@ Create epochs around events.
 - `event_id`: Event IDs to include (dict or null for all)
 - `reject`: Rejection criteria (dict with channel type keys, optional)
 
-### 12. find_bads_channels_threshold
+### 13. find_bads_channels_threshold
 Find bad channels using threshold-based rejection. Marks channels as bad if they exceed rejection thresholds in too many epochs.
 - `picks`: Channel indices to check (optional, default: EEG channels)
 - `excluded_channels`: List of channel names to exclude from bad channel detection (optional)
@@ -420,7 +426,7 @@ Find bad channels using threshold-based rejection. Marks channels as bad if they
 - `n_epochs_bad_ch`: Fraction or number of epochs a channel must be bad in to be marked as bad (default: 0.5)
 - `apply_on`: List of instances to mark bad channels on (default: ['epochs'])
 
-### 13. find_bads_channels_variance
+### 14. find_bads_channels_variance
 Find bad channels using variance-based detection. Identifies channels with abnormally high or low variance.
 - `instance`: Which data instance to use - 'raw' or 'epochs' (default: 'epochs')
 - `picks`: Channel indices to check (optional, default: EEG channels)
@@ -429,7 +435,7 @@ Find bad channels using variance-based detection. Identifies channels with abnor
 - `max_iter`: Maximum iterations for iterative outlier removal (default: 2)
 - `apply_on`: List of instances to mark bad channels on (default: [instance])
 
-### 14. find_bads_channels_high_frequency
+### 15. find_bads_channels_high_frequency
 Find bad channels using high-frequency variance. Detects channels with excessive high-frequency noise.
 - `instance`: Which data instance to use - 'raw' or 'epochs' (default: 'epochs')
 - `picks`: Channel indices to check (optional, default: EEG channels)
@@ -438,22 +444,22 @@ Find bad channels using high-frequency variance. Detects channels with excessive
 - `max_iter`: Maximum iterations for iterative outlier removal (default: 2)
 - `apply_on`: List of instances to mark bad channels on (default: [instance])
 
-### 15. find_bads_epochs_threshold
+### 16. find_bads_epochs_threshold
 Find and remove bad epochs using threshold-based rejection. Drops epochs that have too many bad channels.
 - `picks`: Channel indices to check (optional, default: EEG channels)
 - `excluded_channels`: List of channel names to exclude from epoch rejection criteria (optional)
 - `reject`: Rejection thresholds by channel type (e.g., `{"eeg": 150e-6}`)
 - `n_channels_bad_epoch`: Fraction or number of channels that must be bad for an epoch to be rejected (default: 0.1)
 
-### 16. save_clean_instance
+### 17. save_clean_instance
 Save clean raw or epochs data to .fif file in BIDS-derivatives format.
 - `instance`: Which data instance to save - 'raw' or 'epochs' (default: 'epochs')
 - `overwrite`: Whether to overwrite existing files (default: true)
 
-### 17. generate_json_report
+### 18. generate_json_report
 Generate JSON report with preprocessing information. No parameters needed.
 
-### 18. generate_html_report
+### 19. generate_html_report
 Generate HTML report with interactive visualizations. No parameters needed.
 
 ## Batch Processing

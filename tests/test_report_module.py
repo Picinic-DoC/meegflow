@@ -47,7 +47,6 @@ def test_collect_bad_channels_from_steps():
     
     # Test with steps containing bad channels
     steps = [
-        {'step': 'load_data'},
         {'step': 'find_bads_channels_threshold', 'bad_channels': ['F3', 'C4']},
         {'step': 'bandpass_filter'},
         {'step': 'find_bads_channels_variance', 'bad_channels': ['P4']},
@@ -106,7 +105,6 @@ def test_create_preprocessing_steps_table():
     
     # Test with valid steps
     steps = [
-        {'step': 'load_data'},
         {'step': 'bandpass_filter', 'l_freq': 0.5, 'h_freq': 45.0},
         {'step': 'reference', 'ref_channels': 'average'},
     ]
@@ -115,7 +113,6 @@ def test_create_preprocessing_steps_table():
     
     # Check that HTML contains expected elements
     assert '<table class="params-table table table-hover">' in html, "HTML should contain params table"
-    assert 'load_data' in html, "HTML should contain step name"
     assert 'bandpass_filter' in html, "HTML should contain step name"
     assert '0.5' in html, "HTML should contain parameter value"
     assert 'toggleStep' in html, "HTML should contain toggle function"

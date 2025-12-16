@@ -1,8 +1,67 @@
 """
-Report generation utilities for EEG preprocessing pipeline.
+Report Generation Utilities for EEG Preprocessing Pipeline.
 
-This module contains helper functions for generating HTML reports,
-including bad channels visualization and preprocessing steps tables.
+This module provides helper functions for generating HTML reports with
+interactive visualizations and detailed preprocessing information.
+
+Functions
+---------
+collect_bad_channels_from_steps(preprocessing_steps)
+    Collects all unique bad channels from preprocessing step records.
+    Aggregates channels marked as bad across multiple detection steps.
+
+create_bad_channels_topoplot(info, bad_channels, figsize)
+    Creates a topographical plot showing bad channels marked with red crosses.
+    Uses the montage from the info object for electrode positions.
+
+create_preprocessing_steps_table(preprocessing_steps)
+    Creates an interactive HTML table with collapsible sections for each
+    preprocessing step. Displays step parameters in a formatted, readable way.
+
+Usage
+-----
+These functions are typically called by the generate_html_report step:
+
+```python
+from report import (
+    collect_bad_channels_from_steps,
+    create_bad_channels_topoplot,
+    create_preprocessing_steps_table
+)
+
+# Collect bad channels
+bad_channels = collect_bad_channels_from_steps(preprocessing_steps)
+
+# Create topoplot
+fig = create_bad_channels_topoplot(info, bad_channels)
+
+# Create steps table
+html_table = create_preprocessing_steps_table(preprocessing_steps)
+```
+
+The HTML reports include:
+- Bad channels visualization (topoplot with red crosses)
+- Preprocessing steps summary (collapsible table with parameters)
+- Raw data plots, ICA components, epochs, and evoked responses (via MNE Report)
+
+Report Structure
+----------------
+Generated HTML reports contain:
+1. Bad Channels section (if any bad channels detected)
+   - Topoplot showing channel positions
+   - List of bad channel names
+2. Preprocessing Steps section
+   - Collapsible table with each step's parameters
+   - Parameter values formatted based on type (dict, list, number, etc.)
+3. Data Visualizations (via MNE Report)
+   - ICA components (if ICA was applied)
+   - Raw data traces
+   - Events timeline (if events exist)
+   - Epochs and evoked responses (if epochs exist)
+
+See Also
+--------
+mne.Report : MNE's report generation class
 """
 import json
 from typing import Dict, Any, List, Optional
