@@ -33,8 +33,8 @@ pipeline:
     instance: raw
     channels_to_drop: ['E242', 'E243', 'E244', 'E245', 'E246', 'E247', 'E248', 'E249', 'E250', 'E251', 'E252', 'E253', 'E254', 'E255', 'E256', 'E67', 'E73', 'E68', 'E229', 'E210', 'E218', 'E228', 'E233', 'E219', 'E227', 'E232', 'E237', 'E225', 'E226', 'E231', 'E236', 'E230', 'E235', 'E240', 'E234', 'E239']
 
-  #- name: find_flat_channels
-  #  threshold: 1.0e-12
+  - name: find_flat_channels
+    threshold: 1.0e-12
 
   - name: bandpass_filter
     l_freq: 0.1
@@ -149,3 +149,5 @@ pipeline:
   - name: generate_json_report
   
   - name: generate_html_report
+    plot_raw_kwargs:
+      psd: true

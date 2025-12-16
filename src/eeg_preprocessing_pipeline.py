@@ -909,6 +909,7 @@ class EEGPreprocessingPipeline:
         return data
 
     def _step_generate_html_report(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        
         """Generate HTML reports."""
         import matplotlib.pyplot as plt
         from report import (
@@ -916,6 +917,23 @@ class EEGPreprocessingPipeline:
             create_bad_channels_topoplot,
             create_preprocessing_steps_table
         )
+
+        picks_params = step_config.get('picks', None)
+        excluded_channels = step_config.get('excluded_channels', None)
+        picks = self._get_picks(data['epochs'].info, picks_params, excluded_channels)
+        plot_raw_kwargs = step_config.get('plot_raw_kwargs', {})
+        plot_ica_kwargs = step_config.get('plot_ica_kwargs', {})
+        plot_events_kwargs = step_config.get('plot_events_kwargs', {})
+        plot_epochs_kwargs = step_config.get('plot_epochs_kwargs', {})
+        plot_evokeds_kwargs = step_config.get('plot_evokeds_kwargs', {})
+
+        raw = data.get('raw', None)
+        if raw is not None:
+            raw = raw.copy().pick(picks=picks, exclude='bads')
+        
+        epochs = data.get('epochs', None)
+        if epochs is not None:
+            epochs = epochs.copy().pick(picks=picks, exclude='bads')
 
         html_report = mne.Report(title=f'Preprocessing Report - Subject {data["subject"]}')
 
@@ -967,16 +985,25 @@ class EEGPreprocessingPipeline:
             logger.warning(f"Failed to add preprocessing steps table: {e}")
             pass
 
-        if 'ica' in data:
+        if data.get('ica', None) is not None and raw is not None:
             try:
-                html_report.add_ica(ica=data['ica'], title='ICA Components', inst=data.get('raw'))
+                html_report.add_ica(
+                    ica=data['ica'],
+                    title='ICA Components',
+                    inst=raw,
+                    **plot_ica_kwargs
+                )
             except Exception:
                 # If adding ICA fails, continue without stopping the pipeline
                 pass
 
-        if 'raw' in data:
+        if raw is not None:
             try:
-                html_report.add_raw(raw=data['raw'], title='Clean Raw Data')
+                html_report.add_raw(
+                    raw=raw,
+                    title='Clean Raw Data',
+                    **plot_raw_kwargs
+                )
             except Exception:
                 pass
 
@@ -987,6 +1014,7 @@ class EEGPreprocessingPipeline:
                     event_id=data.get('event_id', None),
                     sfreq=data['events_sfreq'],
                     title='Found Events',
+                    **plot_events_kwargs
                 )
             except Exception:
                 pass
@@ -994,14 +1022,20 @@ class EEGPreprocessingPipeline:
         if 'epochs' in data and data['epochs'] is not None:
 
             try:
-                html_report.add_epochs(epochs=data['epochs'], title='Clean Epochs')
+
+                html_report.add_epochs(
+                    epochs=epochs,
+                    title='Clean Epochs',
+                    **plot_epochs_kwargs
+                )
+                
                 html_report.add_evokeds(
-                    evokeds=data['epochs'].average(by_event_type=True),
-                    n_time_points=step_config.get('n_time_points', None)
+                    evokeds=epochs.average(by_event_type=True),
+                    n_time_points=step_config.get('n_time_points', None),
+                    **plot_evokeds_kwargs
                 )
             except Exception:
                 pass
-
 
         # Derivatives root for this pipeline
         deriv_root = self.bids_root / "derivatives" / "nice_preprocessing" / "reports"
