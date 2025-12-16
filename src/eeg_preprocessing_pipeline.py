@@ -101,7 +101,6 @@ class EEGPreprocessingPipeline:
 
         # Map step names to their corresponding methods
         self.step_functions = {
-            'load_data': self._step_load_data,  # No-op, kept for backward compatibility
             'strip_recording': self._step_strip_recording,
             'concatenate_recordings': self._step_concatenate_recordings,
             'set_montage': self._step_set_montage,
@@ -168,14 +167,10 @@ class EEGPreprocessingPipeline:
         pipeline_steps = self.config.get('pipeline', [])
 
         if not pipeline_steps:
-            pipeline_steps = [
-                {'name': 'load_data'},
-                {'name': 'bandpass_filter', 'l_freq': 0.5, 'h_freq': 45.0},
-                {'name': 'reference', 'type': 'average'},
-                {'name': 'save_clean_instance', 'instance': 'epochs'},
-                {'name': 'generate_json_report'},
-                {'name': 'generate_html_report'},
-            ]
+            raise ValueError(
+                "No pipeline steps provided in configuration. "
+                "Please specify a 'pipeline' list in your config file with at least one preprocessing step."
+            )
     
         return pipeline_steps
 
@@ -253,42 +248,6 @@ class EEGPreprocessingPipeline:
         picks = self._apply_excluded_channels(info, picks, excluded_channels)
         
         return picks
-
-    def _step_load_data(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Load raw data into memory (no-op step for backward compatibility).
-        
-        This step is kept for backward compatibility with existing config files.
-        Data loading now happens automatically in _process_single_recording, so this
-        step does nothing but log that it was called.
-        
-        Parameters (via step_config)
-        -----------------------------
-        None
-        
-        Updates
-        -------
-        data['preprocessing_steps'] : list
-            Appends step information
-        
-        Returns
-        -------
-        data : dict
-            Unchanged data dictionary
-        
-        Notes
-        -----
-        This step can be safely removed from config files. Data is loaded automatically
-        by the pipeline before any preprocessing steps are executed.
-        """
-        logger.info("load_data step (no-op - data already loaded)")
-        
-        data['preprocessing_steps'].append({
-            'step': 'load_data',
-            'note': 'Data loading happens automatically; this is a no-op step for compatibility'
-        })
-        
-        return data
 
     def _step_strip_recording(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         
