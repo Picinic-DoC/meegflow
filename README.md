@@ -365,16 +365,6 @@ Apply bandpass filtering.
 - `excluded_channels`: List of channel names to exclude from filtering (optional)
 - `n_jobs`: Number of parallel jobs (default: 1)
 
-### 4. bandpass_filter
-Apply bandpass filtering.
-- `l_freq`: High-pass filter frequency (Hz)
-- `h_freq`: Low-pass filter frequency (Hz)
-- `l_freq_order`: Filter order for high-pass (default: 6)
-- `h_freq_order`: Filter order for low-pass (default: 8)
-- `picks`: Optional channel indices to filter
-- `excluded_channels`: List of channel names to exclude from filtering (optional)
-- `n_jobs`: Number of parallel jobs (default: 1)
-
 ### 5. notch_filter
 Apply notch filtering to remove line noise.
 - `freqs`: Frequencies to notch filter (e.g., [50.0, 100.0])
