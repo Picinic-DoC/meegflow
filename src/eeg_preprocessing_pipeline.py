@@ -35,6 +35,7 @@ class EEGPreprocessingPipeline:
             'resample': self._step_resample,
             'reference': self._step_reference,
             'interpolate_bad_channels': self._step_interpolate_bad_channels,
+            'drop_bad_channels': self._step_drop_bad_channels,
             'ica': self._step_ica,
             'find_events': self._step_find_events,
             'epoch': self._step_epoch,
@@ -438,6 +439,43 @@ class EEGPreprocessingPipeline:
             'step': 'interpolate_bad_channels',
             'excluded_channels': excluded_channels,
             'instance': instance
+        })
+
+        return data
+
+    def _step_drop_bad_channels(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Drop bad channels without interpolation."""
+        instance = step_config.get('instance', 'epochs')
+        excluded_channels = step_config.get('excluded_channels', None)
+
+        if instance not in data:
+            raise ValueError(f"drop_bad_channels step requires '{instance}' to be present in data (either 'raw' or 'epochs')")
+
+        # Get the list of bad channels before dropping
+        bad_channels = list(data[instance].info['bads'])
+        
+        # Filter out excluded channels if specified
+        if excluded_channels:
+            channels_to_drop = [ch for ch in bad_channels if ch not in excluded_channels]
+            excluded_bads = [ch for ch in bad_channels if ch in excluded_channels]
+            if excluded_bads:
+                logger.info(f"Excluding {len(excluded_bads)} bad channels from dropping: {excluded_bads}")
+        else:
+            channels_to_drop = bad_channels
+        
+        if channels_to_drop:
+            # Drop the bad channels
+            data[instance].drop_channels(channels_to_drop)
+            logger.info(f"Dropped {len(channels_to_drop)} bad channels: {channels_to_drop}")
+        else:
+            logger.info("No bad channels to drop")
+
+        data['preprocessing_steps'].append({
+            'step': 'drop_bad_channels',
+            'instance': instance,
+            'excluded_channels': excluded_channels,
+            'dropped_channels': channels_to_drop,
+            'n_bad_channels': len(channels_to_drop)
         })
 
         return data

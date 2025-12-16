@@ -153,6 +153,7 @@ The pipeline is configuration-driven. You define a list of preprocessing steps, 
 - **resample**: Resample data to different sampling frequency
 - **reference**: Apply re-referencing
 - **interpolate_bad_channels**: Interpolate bad channels
+- **drop_bad_channels**: Drop bad channels without interpolation
 - **ica**: ICA-based artifact removal
 - **find_events**: Find events in the data
 - **epoch**: Create epochs around events
@@ -310,10 +311,11 @@ Many preprocessing steps support an `excluded_channels` parameter that allows yo
 - `find_bads_channels_variance` - Exclude channels from variance-based detection
 - `find_bads_channels_high_frequency` - Exclude channels from high-frequency analysis
 - `find_bads_epochs_threshold` - Exclude channels from epoch rejection criteria
+- `interpolate_bad_channels` - Exclude channels from interpolation even if marked as bad
+- `drop_bad_channels` - Exclude channels from dropping even if marked as bad
 
 **Steps where exclusion doesn't apply:**
 - `reference` - Reference computation uses selected channels; use `ref_channels` parameter instead
-- `interpolate_bad_channels` - Operates only on channels marked as bad
 - `resample` - Resamples all data uniformly
 - `set_montage` - Sets electrode positions for all channels
 - `drop_unused_channels` - Use this for explicit channel removal
@@ -329,6 +331,10 @@ Many preprocessing steps support an `excluded_channels` parameter that allows yo
   reject:
     eeg: 1.0e-4
   excluded_channels: ['Cz', 'FCz']  # Don't mark these as bad
+
+- name: drop_bad_channels
+  instance: epochs
+  excluded_channels: ['Cz']  # Don't drop Cz even if marked as bad
 ```
 
 See `configs/config_with_excluded_channels.yaml` for a complete example.
@@ -377,8 +383,14 @@ Apply re-referencing.
 ### 7. interpolate_bad_channels
 Interpolate bad channels using spherical spline interpolation.
 - `instance`: Which data instance to interpolate - 'raw' or 'epochs' (default: 'epochs')
+- `excluded_channels`: List of channel names to exclude from interpolation (optional)
 
-### 8. ica
+### 8. drop_bad_channels
+Drop bad channels without interpolation. This step removes channels marked as bad from the data instead of interpolating them.
+- `instance`: Which data instance to drop channels from - 'raw' or 'epochs' (default: 'epochs')
+- `excluded_channels`: List of channel names to exclude from dropping even if marked as bad (optional)
+
+### 9. ica
 ICA-based artifact removal.
 - `n_components`: Number of ICA components (default: 20)
 - `method`: ICA method ('fastica', 'infomax', 'picard', default: 'fastica')
@@ -388,11 +400,11 @@ ICA-based artifact removal.
 - `find_ecg`: Automatically find ECG artifacts (true/false, default: false)
 - `apply`: Apply ICA to remove artifacts (true/false, default: true)
 
-### 9. find_events
+### 10. find_events
 Find events in the data.
 - `shortest_event`: Minimum event duration in samples (default: 1)
 
-### 10. epoch
+### 11. epoch
 Create epochs around events.
 - `tmin`: Start time before event (seconds, default: -0.2)
 - `tmax`: End time after event (seconds, default: 0.5)
@@ -400,7 +412,7 @@ Create epochs around events.
 - `event_id`: Event IDs to include (dict or null for all)
 - `reject`: Rejection criteria (dict with channel type keys, optional)
 
-### 11. find_bads_channels_threshold
+### 12. find_bads_channels_threshold
 Find bad channels using threshold-based rejection. Marks channels as bad if they exceed rejection thresholds in too many epochs.
 - `picks`: Channel indices to check (optional, default: EEG channels)
 - `excluded_channels`: List of channel names to exclude from bad channel detection (optional)
@@ -408,7 +420,7 @@ Find bad channels using threshold-based rejection. Marks channels as bad if they
 - `n_epochs_bad_ch`: Fraction or number of epochs a channel must be bad in to be marked as bad (default: 0.5)
 - `apply_on`: List of instances to mark bad channels on (default: ['epochs'])
 
-### 12. find_bads_channels_variance
+### 13. find_bads_channels_variance
 Find bad channels using variance-based detection. Identifies channels with abnormally high or low variance.
 - `instance`: Which data instance to use - 'raw' or 'epochs' (default: 'epochs')
 - `picks`: Channel indices to check (optional, default: EEG channels)
@@ -417,7 +429,7 @@ Find bad channels using variance-based detection. Identifies channels with abnor
 - `max_iter`: Maximum iterations for iterative outlier removal (default: 2)
 - `apply_on`: List of instances to mark bad channels on (default: [instance])
 
-### 13. find_bads_channels_high_frequency
+### 14. find_bads_channels_high_frequency
 Find bad channels using high-frequency variance. Detects channels with excessive high-frequency noise.
 - `instance`: Which data instance to use - 'raw' or 'epochs' (default: 'epochs')
 - `picks`: Channel indices to check (optional, default: EEG channels)
@@ -426,22 +438,22 @@ Find bad channels using high-frequency variance. Detects channels with excessive
 - `max_iter`: Maximum iterations for iterative outlier removal (default: 2)
 - `apply_on`: List of instances to mark bad channels on (default: [instance])
 
-### 14. find_bads_epochs_threshold
+### 15. find_bads_epochs_threshold
 Find and remove bad epochs using threshold-based rejection. Drops epochs that have too many bad channels.
 - `picks`: Channel indices to check (optional, default: EEG channels)
 - `excluded_channels`: List of channel names to exclude from epoch rejection criteria (optional)
 - `reject`: Rejection thresholds by channel type (e.g., `{"eeg": 150e-6}`)
 - `n_channels_bad_epoch`: Fraction or number of channels that must be bad for an epoch to be rejected (default: 0.1)
 
-### 15. save_clean_instance
+### 16. save_clean_instance
 Save clean raw or epochs data to .fif file in BIDS-derivatives format.
 - `instance`: Which data instance to save - 'raw' or 'epochs' (default: 'epochs')
 - `overwrite`: Whether to overwrite existing files (default: true)
 
-### 16. generate_json_report
+### 17. generate_json_report
 Generate JSON report with preprocessing information. No parameters needed.
 
-### 17. generate_html_report
+### 18. generate_html_report
 Generate HTML report with interactive visualizations. No parameters needed.
 
 ## Batch Processing

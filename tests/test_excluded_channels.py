@@ -56,6 +56,7 @@ def test_steps_support_excluded_channels():
         '_step_bandpass_filter',
         '_step_notch_filter',
         '_step_interpolate_bad_channels',
+        '_step_drop_bad_channels',
         '_step_ica',
         '_step_find_flat_channels',
         '_step_find_bads_channels_threshold',
