@@ -311,10 +311,11 @@ Many preprocessing steps support an `excluded_channels` parameter that allows yo
 - `find_bads_channels_variance` - Exclude channels from variance-based detection
 - `find_bads_channels_high_frequency` - Exclude channels from high-frequency analysis
 - `find_bads_epochs_threshold` - Exclude channels from epoch rejection criteria
+- `interpolate_bad_channels` - Exclude channels from interpolation even if marked as bad
+- `drop_bad_channels` - Exclude channels from dropping even if marked as bad
 
 **Steps where exclusion doesn't apply:**
 - `reference` - Reference computation uses selected channels; use `ref_channels` parameter instead
-- `interpolate_bad_channels` - Operates only on channels marked as bad
 - `resample` - Resamples all data uniformly
 - `set_montage` - Sets electrode positions for all channels
 - `drop_unused_channels` - Use this for explicit channel removal
@@ -330,6 +331,10 @@ Many preprocessing steps support an `excluded_channels` parameter that allows yo
   reject:
     eeg: 1.0e-4
   excluded_channels: ['Cz', 'FCz']  # Don't mark these as bad
+
+- name: drop_bad_channels
+  instance: epochs
+  excluded_channels: ['Cz']  # Don't drop Cz even if marked as bad
 ```
 
 See `configs/config_with_excluded_channels.yaml` for a complete example.
@@ -378,10 +383,12 @@ Apply re-referencing.
 ### 7. interpolate_bad_channels
 Interpolate bad channels using spherical spline interpolation.
 - `instance`: Which data instance to interpolate - 'raw' or 'epochs' (default: 'epochs')
+- `excluded_channels`: List of channel names to exclude from interpolation (optional)
 
 ### 8. drop_bad_channels
 Drop bad channels without interpolation. This step removes channels marked as bad from the data instead of interpolating them.
 - `instance`: Which data instance to drop channels from - 'raw' or 'epochs' (default: 'epochs')
+- `excluded_channels`: List of channel names to exclude from dropping even if marked as bad (optional)
 
 ### 9. ica
 ICA-based artifact removal.

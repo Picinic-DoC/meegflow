@@ -446,6 +446,7 @@ class EEGPreprocessingPipeline:
     def _step_drop_bad_channels(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Drop bad channels without interpolation."""
         instance = step_config.get('instance', 'epochs')
+        excluded_channels = step_config.get('excluded_channels', None)
 
         if instance not in data:
             raise ValueError(f"drop_bad_channels step requires '{instance}' to be present in data (either 'raw' or 'epochs')")
@@ -453,16 +454,26 @@ class EEGPreprocessingPipeline:
         # Get the list of bad channels before dropping
         bad_channels = list(data[instance].info['bads'])
         
-        if bad_channels:
+        # Filter out excluded channels if specified
+        if excluded_channels:
+            channels_to_drop = [ch for ch in bad_channels if ch not in excluded_channels]
+            excluded_bads = [ch for ch in bad_channels if ch in excluded_channels]
+            if excluded_bads:
+                logger.info(f"Excluding {len(excluded_bads)} bad channels from dropping: {excluded_bads}")
+        else:
+            channels_to_drop = bad_channels
+        
+        if channels_to_drop:
             # Drop the bad channels
-            data[instance].drop_channels(bad_channels)
-            logger.info(f"Dropped {len(bad_channels)} bad channels: {bad_channels}")
+            data[instance].drop_channels(channels_to_drop)
+            logger.info(f"Dropped {len(channels_to_drop)} bad channels: {channels_to_drop}")
 
         data['preprocessing_steps'].append({
             'step': 'drop_bad_channels',
             'instance': instance,
-            'bad_channels': bad_channels,
-            'n_bad_channels': len(bad_channels)
+            'excluded_channels': excluded_channels,
+            'bad_channels': channels_to_drop,
+            'n_bad_channels': len(channels_to_drop)
         })
 
         return data
