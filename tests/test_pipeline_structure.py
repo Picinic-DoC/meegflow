@@ -64,6 +64,7 @@ def test_pipeline_has_required_methods():
         "_step_resample",
         "_step_reference",
         "_step_interpolate_bad_channels",
+        "_step_drop_bad_channels",
         "_step_ica",
         "_step_find_events",
         "_step_epoch",

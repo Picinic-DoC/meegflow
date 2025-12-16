@@ -35,6 +35,7 @@ class EEGPreprocessingPipeline:
             'resample': self._step_resample,
             'reference': self._step_reference,
             'interpolate_bad_channels': self._step_interpolate_bad_channels,
+            'drop_bad_channels': self._step_drop_bad_channels,
             'ica': self._step_ica,
             'find_events': self._step_find_events,
             'epoch': self._step_epoch,
@@ -438,6 +439,30 @@ class EEGPreprocessingPipeline:
             'step': 'interpolate_bad_channels',
             'excluded_channels': excluded_channels,
             'instance': instance
+        })
+
+        return data
+
+    def _step_drop_bad_channels(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Drop bad channels without interpolation."""
+        instance = step_config.get('instance', 'epochs')
+
+        if instance not in data:
+            raise ValueError(f"drop_bad_channels step requires '{instance}' to be present in data (either 'raw' or 'epochs')")
+
+        # Get the list of bad channels before dropping
+        bad_channels = list(data[instance].info['bads'])
+        
+        if bad_channels:
+            # Drop the bad channels
+            data[instance].drop_channels(bad_channels)
+            logger.info(f"Dropped {len(bad_channels)} bad channels: {bad_channels}")
+
+        data['preprocessing_steps'].append({
+            'step': 'drop_bad_channels',
+            'instance': instance,
+            'bad_channels': bad_channels,
+            'n_bad_channels': len(bad_channels)
         })
 
         return data
