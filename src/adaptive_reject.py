@@ -3,6 +3,68 @@
 # Proprietary and confidential
 # Written by Federico Raimondo <federaimondo@gmail.com>, October 2017
 
+"""
+Adaptive rejection methods for bad channel and epoch detection.
+
+This module provides functions for detecting bad channels and epochs using
+adaptive threshold-based and statistical methods. These functions are used
+by the preprocessing pipeline's find_bads_* steps.
+
+Functions
+---------
+find_bads_channels_threshold(epochs, picks, reject, n_epochs_bad_ch)
+    Find bad channels based on how often they exceed rejection thresholds.
+    Marks channels as bad if they exceed thresholds in too many epochs.
+
+find_bads_channels_variance(inst, picks, zscore_thresh, max_iter)
+    Find bad channels with abnormally high or low variance.
+    Uses iterative z-score based outlier detection.
+
+find_bads_channels_high_frequency(inst, picks, zscore_thresh, max_iter)
+    Find bad channels with excessive high-frequency noise.
+    Applies high-pass filter (25 Hz) and detects outliers in standard deviation.
+
+_iteratively_find_outliers(X, threshold, max_iter)
+    Internal helper for iterative z-score based outlier detection.
+    
+Parameters
+----------
+All functions accept:
+  inst/epochs : mne.io.Raw or mne.Epochs
+      The MNE data object to analyze
+  picks : array-like
+      Channel indices to check for bad channels
+  zscore_thresh : float (variance/high_frequency methods)
+      Z-score threshold for outlier detection (typically 3-4)
+  max_iter : int (variance/high_frequency methods)
+      Maximum iterations for iterative outlier removal
+  reject : dict (threshold method)
+      Rejection thresholds by channel type (e.g., {'eeg': 150e-6})
+  n_epochs_bad_ch : float or int (threshold method)
+      Fraction (0-1) or number of epochs a channel must be bad in
+
+Returns
+-------
+bad_chs : list of str
+    List of channel names identified as bad
+
+Examples
+--------
+Find bad channels using threshold method:
+```python
+bad_channels = find_bads_channels_threshold(
+    epochs, picks=[0,1,2,3], reject={'eeg': 150e-6}, n_epochs_bad_ch=0.5
+)
+```
+
+Find bad channels using variance:
+```python
+bad_channels = find_bads_channels_variance(
+    epochs, picks=[0,1,2,3], zscore_thresh=4, max_iter=2
+)
+```
+"""
+
 import math
 import numpy as np
 
