@@ -958,7 +958,17 @@ class EEGPreprocessingPipeline:
 
         picks_params = step_config.get('picks', None)
         excluded_channels = step_config.get('excluded_channels', None)
-        picks = self._get_picks(data['epochs'].info, picks_params, excluded_channels)
+        
+        # Get info from epochs if available, otherwise from raw
+        info = None
+        if 'epochs' in data and data['epochs'] is not None:
+            info = data['epochs'].info
+        elif 'raw' in data and data['raw'] is not None:
+            info = data['raw'].info
+        else:
+            raise ValueError("generate_html_report requires either 'raw' or 'epochs' in data")
+        
+        picks = self._get_picks(info, picks_params, excluded_channels)
         plot_raw_kwargs = step_config.get('plot_raw_kwargs', {})
         plot_ica_kwargs = step_config.get('plot_ica_kwargs', {})
         plot_events_kwargs = step_config.get('plot_events_kwargs', {})
