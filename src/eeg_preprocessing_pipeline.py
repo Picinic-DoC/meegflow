@@ -467,12 +467,14 @@ class EEGPreprocessingPipeline:
             # Drop the bad channels
             data[instance].drop_channels(channels_to_drop)
             logger.info(f"Dropped {len(channels_to_drop)} bad channels: {channels_to_drop}")
+        else:
+            logger.info("No bad channels to drop")
 
         data['preprocessing_steps'].append({
             'step': 'drop_bad_channels',
             'instance': instance,
             'excluded_channels': excluded_channels,
-            'bad_channels': channels_to_drop,
+            'dropped_channels': channels_to_drop,
             'n_bad_channels': len(channels_to_drop)
         })
 
