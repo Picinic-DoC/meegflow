@@ -69,7 +69,8 @@ pipeline:
     method: fastica
     find_eog: true
     eog_channels: [E1, E18, E37, E54, E238, E241]
-    eog_threshold: null   # null => seuil auto MNE
+    eog_threshold: 0.4   # null => seuil auto MNE
+    measure: 'correlation' 
     fit_l_freq: 1.0
     find_ecg: false
     #selected_indices: [0, 1, 2]  # Uncomment and set to manually select components to remove

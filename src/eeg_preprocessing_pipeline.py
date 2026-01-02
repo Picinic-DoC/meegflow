@@ -768,6 +768,7 @@ class EEGPreprocessingPipeline:
         method = step_config.get('method', 'fastica')
         picks_params = step_config.get('picks', None)
         excluded_channels = step_config.get('excluded_channels', None)
+        measure = step_config.get('measure', 'correlation')  # not used currently
         
          # EOG config
         default_eog_chs = ['E1', 'E18', 'E37', 'E54', 'E238', 'E241']
@@ -823,13 +824,15 @@ class EEGPreprocessingPipeline:
                     eog_indices, eog_scores = ica.find_bads_eog(
                         raw,                 # use the actual raw for scoring (fine)
                         ch_name=present_eog, # your explicit EOG channels
+                        measure=measure
                     )
                 else:
                     # FIXED THRESHOLD
                     eog_indices, eog_scores = ica.find_bads_eog(
                         raw,                 # use the actual raw for scoring (fine)
                         ch_name=present_eog, # your explicit EOG channels
-                        threshold=float(eog_threshold)
+                        threshold=float(eog_threshold),
+                        measure=measure
                     )   
                     
                 if eog_indices:
