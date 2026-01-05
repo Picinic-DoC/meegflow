@@ -37,6 +37,7 @@ def test_run_pipeline_signature():
         'tasks',
         'acquisitions',
         'extension',
+        'group_by',
     ]
     
     for param in expected_params:
@@ -55,6 +56,7 @@ def test_cli_passes_correct_arguments():
     assert "subjects=args.subjects" in code, "subjects parameter not passed to run_pipeline"
     assert "tasks=args.tasks" in code, "tasks parameter not passed to run_pipeline"
     assert "sessions=args.sessions" in code, "sessions parameter not passed to run_pipeline"
+    assert "group_by=args.group_by" in code, "group_by parameter not passed to run_pipeline"
     
     print("✓ CLI passes correct arguments to run_pipeline")
 
@@ -75,6 +77,7 @@ def test_cli_has_new_arguments():
         '--acquisitions',
         '--runs',
         '--extension',
+        '--group-by',
         '--config', 
         '--log-file',
         '--log-level',

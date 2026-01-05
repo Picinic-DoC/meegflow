@@ -147,6 +147,51 @@ class EEGPreprocessingPipeline:
     
         raise ValueError(f"Invalid type for entity '{entity_key}': {type(entity_value)}")
 
+    def _resolve_grouping_keys(self, group_by: Union[str, List[str], None]) -> List[str]:
+        """Normalize grouping keys for recording aggregation.
+
+        Parameters
+        ----------
+        group_by : str | list[str] | None
+            Grouping strategy requested by the user.
+
+        Returns
+        -------
+        list of str
+            Ordered grouping keys used to build aggregation identifiers.
+        """
+        default_keys = ['subject', 'session', 'task', 'acquisition']
+        allowed_groupings = ['subject', 'session', 'acquisition']
+
+        if group_by is None:
+            return default_keys
+
+        if isinstance(group_by, str):
+            group_by = [group_by]
+
+        if not isinstance(group_by, list):
+            raise ValueError("group_by must be a string, list of strings, or None")
+
+        invalid = [g for g in group_by if g not in allowed_groupings]
+        if invalid:
+            raise ValueError(f"Invalid group_by values: {invalid}. Allowed: {allowed_groupings}")
+
+        # Always keep subject-level separation to avoid mixing across participants
+        normalized = list(dict.fromkeys(group_by))
+        if 'subject' not in normalized:
+            normalized.insert(0, 'subject')
+
+        # Preserve hierarchical ordering and avoid grouping acquisitions across sessions
+        ordered = []
+        for key in ['subject', 'session', 'acquisition']:
+            if key in normalized:
+                ordered.append(key)
+
+        if 'acquisition' in ordered and 'session' not in ordered:
+            ordered.insert(1, 'session')
+
+        return ordered if ordered else default_keys
+
     def _find_events_from_raw(self, raw, get_events_from='annotations', shortest_event=1, event_id='auto', stim_channel=None):
         
         if get_events_from == 'stim_channel':
@@ -1746,7 +1791,8 @@ class EEGPreprocessingPipeline:
         sessions: Union[str, List[str]] = None,
         tasks: Union[str, List[str]] = None,
         acquisitions: Union[str, List[str]] = None,
-        extension: str = '.vhdr'
+        extension: str = '.vhdr',
+        group_by: Union[str, List[str], None] = None,
     ) -> Dict[str, Any]:
         """Run the pipeline using mne-bids to query files.
 
@@ -1760,6 +1806,12 @@ class EEGPreprocessingPipeline:
             Task(s) to process. None matches all tasks.
         acquisitions : str | list of str | None
             Acquisition parameter(s). None matches all acquisitions.
+        extension : str
+            Extension for EEG files to match.
+        group_by : str | list[str] | None
+            Group recordings before processing. Supports 'subject', 'session', or
+            'acquisition'. When None, recordings are processed per unique
+            (subject, session, task, acquisition) combination.
 
         Returns
         -------
@@ -1771,15 +1823,40 @@ class EEGPreprocessingPipeline:
         sessions = self._get_entity_values('session', sessions)
         tasks = self._get_entity_values('task', tasks)
         acquisitions = self._get_entity_values('acquisition', acquisitions)
+        group_keys = self._resolve_grouping_keys(group_by)
         
         # print subjects, sessions, tasks, acquisitions
         logger.info(f"Subjects to process: {subjects}")
         logger.info(f"Sessions to process: {sessions}")
         logger.info(f"Tasks to process: {tasks}")
         logger.info(f"Acquisitions to process: {acquisitions}")
+        logger.info(f"Grouping recordings by: {group_keys}")
 
-        n_combinations = len(subjects) * len(sessions) * len(tasks) * len(acquisitions)
-        logger.info(f"Computing {n_combinations} matching file(s) to process")
+        grouped_paths: Dict[tuple, List[BIDSPath]] = defaultdict(list)
+
+        for subject, session, task, acquisition in product(subjects, sessions, tasks, acquisitions):
+            pb = BIDSPath(
+                root=self.bids_root,
+                subject=subject,
+                session=session,
+                task=task,
+                acquisition=acquisition,
+                extension=extension,
+                suffix='eeg',
+                datatype='eeg',
+            )
+
+            all_raw_paths = list(pb.match(ignore_nosub=True))
+            for raw_path in all_raw_paths:
+                group_id = tuple(getattr(raw_path, key) for key in group_keys)
+                grouped_paths[group_id].append(raw_path)
+
+        n_groups = len(grouped_paths)
+        total_recordings = sum(len(paths) for paths in grouped_paths.values())
+        logger.info(f"Found {total_recordings} recording(s) across {n_groups} group(s) to process")
+        if n_groups == 0:
+            logger.warning("No recordings matched the provided filters.")
+            return {}
 
         all_results = {}
         
@@ -1796,30 +1873,20 @@ class EEGPreprocessingPipeline:
             # Overall progress for all recordings
             overall_task = progress.add_task(
                 "[green]Processing recordings", 
-                total=n_combinations
+                total=n_groups
             )
 
-            for i, (subject, session, task, acquisition) in enumerate(product(subjects, sessions, tasks, acquisitions)):
+            def _format_group_name(keys: List[str], values: tuple) -> str:
+                return " | ".join(f"{k}:{v if v is not None else 'none'}" for k, v in zip(keys, values))
 
-                pb = BIDSPath(
-                    root=self.bids_root,
-                    subject=subject,
-                    session=session,
-                    task=task,
-                    acquisition=acquisition,
-                    extension=extension,
-                    suffix='eeg',
-                    datatype='eeg',
-                )
-
-                all_raw_paths = list(pb.match(ignore_nosub=True))
-                logger.info(f"Found {len(all_raw_paths)} recording(s) for {subject} - {session} - {task} - {acquisition} to process together.")
+            for i, (group_id, all_raw_paths) in enumerate(sorted(grouped_paths.items(), key=lambda item: tuple(v or '' for v in item[0]))):
+                recording_name = _format_group_name(group_keys, group_id)
+                logger.info(f"Found {len(all_raw_paths)} recording(s) for {recording_name} to process together.")
 
                 # Get pipeline steps for this recording's progress bar
                 pipeline_steps = self._get_pipeline_steps()
                 
                 # Create a task for the current recording's steps
-                recording_name = f"{subject} - {session} - {task} - {acquisition}"
                 step_task = progress.add_task(
                     f"[cyan]{recording_name}", 
                     total=len(pipeline_steps)
@@ -1827,12 +1894,14 @@ class EEGPreprocessingPipeline:
                 
                 try:
                     results = self._process_single_recording(all_raw_paths, progress, step_task)
-                    all_results.setdefault(subject, []).append(results)
+                    subject_id = group_id[group_keys.index('subject')]
+                    all_results.setdefault(subject_id, []).append(results)
                     logger.info(f"Successfully completed {recording_name}")
                 except Exception as exc:
                     # Do not stop the whole batch if one subject fails; capture the error
                     logger.error(f"Error processing {recording_name}: {str(exc)}")
-                    all_results.setdefault(subject, []).append({'error': str(exc)})
+                    subject_id = group_id[group_keys.index('subject')]
+                    all_results.setdefault(subject_id, []).append({'error': str(exc)})
                     raise exc
                 finally:
                     # Remove the step task after this recording is done

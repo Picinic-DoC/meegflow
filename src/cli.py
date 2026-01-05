@@ -99,6 +99,13 @@ def _parse_args():
         default='.vhdr',
         help='File extension to process.'
     )
+    parser.add_argument(
+        '--group-by',
+        nargs='+',
+        choices=['subject', 'session', 'acquisition'],
+        required=False,
+        help='Group recordings before processing (e.g., --group-by subject session).'
+    )
     parser.add_argument('--config', required=False, help='Path to YAML config file with preprocessing parameters.')
     parser.add_argument('--log-file', required=False, help='Path to log file. If not specified, logs will be printed to console.')
     parser.add_argument('--log-level', required=False, default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], help='Logging level (default: INFO).')
@@ -137,6 +144,7 @@ def main():
         tasks=args.tasks,
         acquisitions=args.acquisitions,
         extension=args.extension,
+        group_by=args.group_by,
     )
 
     # Log summary of results

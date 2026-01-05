@@ -144,7 +144,8 @@ Process specific subjects with multiple tasks:
 python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 \
-    --tasks rest task1 task2
+    --tasks rest task1 task2 \
+    --group-by subject session
 ```
 
 #### Python API Usage
@@ -171,7 +172,8 @@ pipeline = EEGPreprocessingPipeline(
 # Run preprocessing on multiple subjects
 results = pipeline.run_pipeline(
     subjects=['01', '02', '03'],
-    tasks='rest'
+    tasks='rest',
+    group_by='session',  # process all recordings from the same session together
 )
 
 # Access results for each subject
