@@ -178,6 +178,9 @@ class EEGPreprocessingPipeline:
 
         # Always keep subject-level separation to avoid mixing across participants
         normalized = list(dict.fromkeys(group_by))
+        # `subject` remains in allowed_groupings so callers can explicitly request
+        # subject-only grouping (vs. subject+session/acquisition). We also inject it
+        # if missing to prevent cross-subject aggregation by default.
         if 'subject' not in normalized:
             normalized.insert(0, 'subject')
 
