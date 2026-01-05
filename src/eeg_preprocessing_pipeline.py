@@ -161,7 +161,7 @@ class EEGPreprocessingPipeline:
             Ordered grouping keys used to build aggregation identifiers.
         """
         default_keys = ['subject', 'session', 'task', 'acquisition']
-        allowed_groupings = ['subject', 'session', 'acquisition']
+        allowed_groupings = ['subject', 'session', 'task', 'acquisition']
 
         if group_by is None:
             return default_keys
@@ -186,7 +186,7 @@ class EEGPreprocessingPipeline:
 
         # Preserve hierarchical ordering and avoid grouping acquisitions across sessions
         ordered = []
-        for key in ['subject', 'session', 'acquisition']:
+        for key in ['subject', 'session', 'task', 'acquisition']:
             if key in normalized:
                 ordered.append(key)
 

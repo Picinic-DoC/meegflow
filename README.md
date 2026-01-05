@@ -145,7 +145,7 @@ python src/cli.py \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 \
     --tasks rest task1 task2 \
-    --group-by subject session
+    --group-by subject session  # you can also include task or acquisition
 ```
 
 #### Python API Usage

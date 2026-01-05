@@ -102,7 +102,7 @@ def _parse_args():
     parser.add_argument(
         '--group-by',
         nargs='+',
-        choices=['subject', 'session', 'acquisition'],
+        choices=['subject', 'session', 'task', 'acquisition'],
         required=False,
         help='Group recordings before processing (e.g., --group-by subject session).'
     )
