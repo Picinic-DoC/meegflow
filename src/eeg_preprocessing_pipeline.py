@@ -140,11 +140,11 @@ class EEGPreprocessingPipeline:
     
         if isinstance(entity_value, list):
             return entity_value
-        
+
         # TODO: restore get_entity_vals and think how to improve the acq and other parameters that may be usefull to group but not mandatory
         if entity_value is None:
             return [None]
-    
+
         raise ValueError(f"Invalid type for entity '{entity_key}': {type(entity_value)}")
 
     def _find_events_from_raw(self, raw, get_events_from='annotations', shortest_event=1, event_id='auto', stim_channel=None):
@@ -303,9 +303,6 @@ class EEGPreprocessingPipeline:
         else:
             data['raw'] = data['all_raw'][0]
 
-        # set all channels as EEG
-        data['raw'].set_channel_types({ch['ch_name']: 'eeg' for ch in data['raw'].info['chs']})
-        
         data['preprocessing_steps'].append({
             'step': 'concatenate_recordings',
         })
@@ -1813,6 +1810,10 @@ class EEGPreprocessingPipeline:
                 )
 
                 all_raw_paths = list(pb.match(ignore_nosub=True))
+                if len(all_raw_paths) == 0:
+                    logger.warning(f"No files found for {subject} - {session} - {task} - {acquisition}, skipping.")
+                    continue
+
                 logger.info(f"Found {len(all_raw_paths)} recording(s) for {subject} - {session} - {task} - {acquisition} to process together.")
 
                 # Get pipeline steps for this recording's progress bar
