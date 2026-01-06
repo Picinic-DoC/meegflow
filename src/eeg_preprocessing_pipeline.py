@@ -87,7 +87,7 @@ import json
 import mne
 from mne.utils import logger
 import numpy as np
-from mne_bids import BIDSPath, read_raw_bids
+from mne_bids import BIDSPath, read_raw_bids, get_entity_vals
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 import adaptive_reject
 from collections import defaultdict
@@ -141,9 +141,15 @@ class EEGPreprocessingPipeline:
         if isinstance(entity_value, list):
             return entity_value
 
-        # TODO: restore get_entity_vals and think how to improve the acq and other parameters that may be usefull to group but not mandatory
         if entity_value is None:
-            return [None]
+            # Use get_entity_vals to find all existing values for this entity
+            all_values = get_entity_vals(
+                root=self.bids_root,
+                entity_key=entity_key,
+                ignore_dirs=('derivatives', 'sourcedata')
+            )
+            # Return the list of values, or [None] if no values found
+            return list(all_values) if all_values else [None]
 
         raise ValueError(f"Invalid type for entity '{entity_key}': {type(entity_value)}")
 
