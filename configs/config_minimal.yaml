@@ -68,18 +68,22 @@ pipeline:
     zscore_thresh: 4
     max_iter: 2
   
+  - name: copy_instance
+    from_instance: raw
+    to_instance: raw_before_ica
+
   - name: ica
     n_components: 20
     method: fastica
     find_eog: true
     eog_channels: [E1, E18, E37, E54, E238, E241]
-    eog_threshold: 0.4   # null => seuil auto MNE
+    eog_threshold: 0.6   # null => seuil auto MNE
     eog_measure: 'correlation'
-    find_ecg: true
-    ecg_channels: [E2, E3]
-    ecg_threshold: 0.4   # null => seuil auto MNE
-    ecg_measure: 'correlation' 
-    ica_l_freq: 1.0
+    #find_ecg: false
+    #ecg_channels: [E2, E3]
+    #ecg_threshold: 0.4   # null => seuil auto MNE
+    #ecg_measure: 'correlation' 
+    ica_fit_l_freq: 1.0
     #selected_indices: [0, 1, 2]  # Uncomment and set to manually select components to remove
     apply: true
   
@@ -168,6 +172,14 @@ pipeline:
         instance_b:
           name: 'raw_before_cleaning'
           label: 'Before Cleaning'
+      - title: 'Before vs After ICA'
+        instance_a:
+          name: 'raw'
+          label: 'After Cleaning'
+        instance_b:
+          name: 'raw_before_ica'
+          label: 'Before ICA'
+
 
     plot_raw_kwargs:
       psd: true

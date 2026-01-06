@@ -946,7 +946,7 @@ class EEGPreprocessingPipeline:
 
         # Apply ICA to remove artifacts if requested
         if apply:
-            ica.apply(raw)
+            ica.apply(data['raw'])
         
         data['ica'] = ica
 
@@ -1578,8 +1578,8 @@ class EEGPreprocessingPipeline:
             if set(ch_names_a) != set(ch_names_b):
                 raise ValueError(f"compare_instances step: channel mismatch between '{inst_a}' and '{inst_b}' after picking")
 
-            raw_b = inst_a.copy().pick(picks=picks).reorder_channels(ch_names_a)
-            raw_a = inst_b.copy().pick(picks=picks).reorder_channels(ch_names_b)
+            raw_b = inst_b.copy().pick(picks=picks).reorder_channels(ch_names_a)
+            raw_a = inst_a.copy().pick(picks=picks).reorder_channels(ch_names_b)
 
             Xb = raw_b.get_data()
             Xa = raw_a.get_data()
@@ -1621,7 +1621,7 @@ class EEGPreprocessingPipeline:
         # ---------- Cleaned Raw report ----------
         if data.get('raw', None) is not None:
             html_report.add_raw(
-                raw=data['raw'],
+                raw=data['raw'].copy().pick(picks=picks),
                 title='Clean Raw Data',
                 **plot_raw_kwargs
             )
@@ -1639,14 +1639,16 @@ class EEGPreprocessingPipeline:
         # ---------- Cleaned Epochs report ----------
         if data.get('epochs', None) is not None:
 
+            epochs=data['epochs'].copy().pick(picks=picks)
+
             html_report.add_epochs(
-                epochs=data['epochs'],
+                epochs=epochs,
                 title='Clean Epochs',
                 **plot_epochs_kwargs
             )
             
             html_report.add_evokeds(
-                evokeds=data['epochs'].average(by_event_type=True),
+                evokeds=epochs.average(by_event_type=True),
                 n_time_points=step_config.get('n_time_points', None),
                 **plot_evokeds_kwargs
             )
