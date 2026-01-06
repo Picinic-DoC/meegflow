@@ -1658,18 +1658,18 @@ class EEGPreprocessingPipeline:
             inst_b = data[inst_b_name]
 
             # Ensure channel alignment (same channel order)
-            picks = self._get_picks(
+            ch_names_picks = self._get_picks(
                 inst.info,
                 picks_params,
                 excluded_channels
             )
-            ch_names_a = sorted([inst_a.ch_names[pick] for pick in picks])
-            ch_names_b = sorted([inst_b.ch_names[pick] for pick in picks])
+            ch_names_a = sorted([inst_a.ch_names[pick] for pick in ch_names_picks])
+            ch_names_b = sorted([inst_b.ch_names[pick] for pick in ch_names_picks])
             if set(ch_names_a) != set(ch_names_b):
                 raise ValueError(f"compare_instances step: channel mismatch between '{inst_a}' and '{inst_b}' after picking")
 
-            raw_b = inst_b.copy().pick(picks=picks).reorder_channels(ch_names_a)
-            raw_a = inst_a.copy().pick(picks=picks).reorder_channels(ch_names_b)
+            raw_b = inst_b.copy().pick(picks=ch_names_picks).reorder_channels(ch_names_a)
+            raw_a = inst_a.copy().pick(picks=ch_names_picks).reorder_channels(ch_names_b)
 
             Xb = raw_b.get_data()
             Xa = raw_a.get_data()
