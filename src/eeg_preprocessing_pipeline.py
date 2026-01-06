@@ -946,7 +946,7 @@ class EEGPreprocessingPipeline:
 
         # Apply ICA to remove artifacts if requested
         if apply:
-            ica.apply(raw)
+            ica.apply(data['raw'])
         
         data['ica'] = ica
 
@@ -1377,11 +1377,17 @@ class EEGPreprocessingPipeline:
         elif len(data['preprocessing_steps']) == 0:
             raise ValueError("data['preprocessing_steps'] is empty. Cannot generate report without any preprocessing steps.")
 
+<<<<<<< HEAD
         # Get info from epochs if available, otherwise from raw
         inst = data['raw'] if 'raw' in data else data['epochs'] if 'epochs' in data else None
         if inst is None:
             raise ValueError("generate_html_report requires either 'raw' or 'epochs' in data")
 
+=======
+        picks = self._get_picks(inst.info, picks_params, excluded_channels)
+        inst_info_for_topo = inst.copy().pick(picks=picks).info
+        inst = inst.copy().pick(picks=picks, exclude='bads')
+>>>>>>> 63a4c3a (fix ica)
         preprocessing_steps = data['preprocessing_steps']
 
         html_report = mne.Report(title=f'Preprocessing Report - Subject {data["subject"]}')
@@ -1392,8 +1398,14 @@ class EEGPreprocessingPipeline:
         # Create topoplot if we have bad channels and info
         if len(bad_channels) > 0:
             logger.info(f"Adding bad channels topoplot with {len(bad_channels)} bad channels")
+<<<<<<< HEAD
             fig = create_bad_channels_topoplot(inst.info, bad_channels)
 
+=======
+            #fig = create_bad_channels_topoplot(inst.info, bad_channels)
+            fig = create_bad_channels_topoplot(inst_info_for_topo, bad_channels)
+            
+>>>>>>> 63a4c3a (fix ica)
             if fig is not None:
                 # Add to report
                 html_report.add_figure(
@@ -1578,8 +1590,8 @@ class EEGPreprocessingPipeline:
             if set(ch_names_a) != set(ch_names_b):
                 raise ValueError(f"compare_instances step: channel mismatch between '{inst_a}' and '{inst_b}' after picking")
 
-            raw_b = inst_a.copy().pick(picks=picks).reorder_channels(ch_names_a)
-            raw_a = inst_b.copy().pick(picks=picks).reorder_channels(ch_names_b)
+            raw_b = inst_b.copy().pick(picks=picks).reorder_channels(ch_names_a)
+            raw_a = inst_a.copy().pick(picks=picks).reorder_channels(ch_names_b)
 
             Xb = raw_b.get_data()
             Xa = raw_a.get_data()
@@ -1621,7 +1633,7 @@ class EEGPreprocessingPipeline:
         # ---------- Cleaned Raw report ----------
         if data.get('raw', None) is not None:
             html_report.add_raw(
-                raw=data['raw'],
+                raw=data['raw'].copy().pick(picks=picks),
                 title='Clean Raw Data',
                 **plot_raw_kwargs
             )
@@ -1638,15 +1650,16 @@ class EEGPreprocessingPipeline:
 
         # ---------- Cleaned Epochs report ----------
         if data.get('epochs', None) is not None:
-
+            epochs=data['epochs'].copy().pick(picks=picks)
+            
             html_report.add_epochs(
-                epochs=data['epochs'],
+                epochs=epochs,
                 title='Clean Epochs',
                 **plot_epochs_kwargs
             )
             
             html_report.add_evokeds(
-                evokeds=data['epochs'].average(by_event_type=True),
+                evokeds=epochs.average(by_event_type=True),
                 n_time_points=step_config.get('n_time_points', None),
                 **plot_evokeds_kwargs
             )
