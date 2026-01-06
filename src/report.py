@@ -134,75 +134,68 @@ def create_bad_channels_topoplot(
     fig : matplotlib.figure.Figure or None
         Figure containing the topoplot, or None if creation failed.
     """
+
     if not bad_channels:
         logger.info("No bad channels to plot")
         return None
-    
-    try:
-        # Create figure
-        fig, ax = plt.subplots(figsize=figsize)
-        
-        # Get all EEG channel positions
-        eeg_picks = mne.pick_types(info, eeg=True, exclude=[])
-        
-        if len(eeg_picks) == 0:
-            logger.warning("No EEG channels found for topoplot")
-            plt.close(fig)
-            return None
-        
-        # Get channel names
-        ch_names = [info['ch_names'][i] for i in eeg_picks]
-        
-        # Create data array (all zeros for white background)
-        data_to_plot = np.zeros(len(eeg_picks))
-        
-        # Create mask for bad channels
-        mask = np.array([ch in bad_channels for ch in ch_names])
-        
-        if not np.any(mask):
-            logger.warning("None of the bad channels are in the EEG channels")
-            plt.close(fig)
-            return None
-        
-        # Plot topomap with white background
-        # The montage from info will be used automatically by plot_topomap
-        from mne.viz import plot_topomap
-        im, cn = plot_topomap(
-            data_to_plot, 
-            info,
-            axes=ax,
-            show=False,
-            cmap='Greys',
-            vlim=(0, 0.1),
-            mask=mask,
-            mask_params=dict(
-                marker='x',
-                markerfacecolor='red',
-                markeredgecolor='red',
-                linewidth=0,
-                markersize=15
-            ),
-            sensors=True,
-            contours=0
-        )
-        
-        ax.set_title(f'Bad Channels (n={len(bad_channels)})', fontsize=14, fontweight='bold')
-        
-        # Add text listing bad channels
-        bad_channels_text = ', '.join(bad_channels)
-        fig.text(0.5, 0.05, f'Bad channels: {bad_channels_text}', 
-                ha='center', fontsize=10, wrap=True)
-        
-        plt.tight_layout()
-        
-        return fig
 
-    # TODO: refine exception handling to specific errors or remove
-    except Exception as e:
-        logger.warning(f"Failed to create bad channels topoplot: {e}")
-        if 'fig' in locals():
-            plt.close(fig)
+    # Create figure
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    # Get all EEG channel positions
+    eeg_picks = mne.pick_types(info, eeg=True, exclude=[])
+
+    if len(eeg_picks) == 0:
+        logger.warning("No EEG channels found for topoplot")
+        plt.close(fig)
         return None
+    
+    # Get channel names
+    ch_names = [info['ch_names'][i] for i in eeg_picks]
+    
+    # Create data array (all zeros for white background)
+    data_to_plot = np.zeros(len(eeg_picks))
+    
+    # Create mask for bad channels
+    mask = np.array([ch in bad_channels for ch in ch_names])
+    
+    if not np.any(mask):
+        logger.warning("None of the bad channels are in the EEG channels")
+        plt.close(fig)
+        return None
+    
+    # Plot topomap with white background
+    # The montage from info will be used automatically by plot_topomap
+    from mne.viz import plot_topomap
+    im, cn = plot_topomap(
+        data_to_plot, 
+        info,
+        axes=ax,
+        show=False,
+        cmap='Greys',
+        vlim=(0, 0.1),
+        mask=mask,
+        mask_params=dict(
+            marker='x',
+            markerfacecolor='red',
+            markeredgecolor='red',
+            linewidth=0,
+            markersize=15
+        ),
+        sensors=True,
+        contours=0
+    )
+    
+    ax.set_title(f'Bad Channels (n={len(bad_channels)})', fontsize=14, fontweight='bold')
+    
+    # Add text listing bad channels
+    bad_channels_text = ', '.join(bad_channels)
+    fig.text(0.5, 0.05, f'Bad channels: {bad_channels_text}', 
+            ha='center', fontsize=10, wrap=True)
+    
+    plt.tight_layout()
+    
+    return fig
 
 
 def create_preprocessing_steps_table(preprocessing_steps: List[Dict[str, Any]]) -> str:

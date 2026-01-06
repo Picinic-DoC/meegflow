@@ -1369,11 +1369,6 @@ class EEGPreprocessingPipeline:
         plot_events_kwargs = step_config.get('plot_events_kwargs', {})
         plot_epochs_kwargs = step_config.get('plot_epochs_kwargs', {})
         plot_evokeds_kwargs = step_config.get('plot_evokeds_kwargs', {})
-        
-        # Get info from epochs if available, otherwise from raw
-        inst = data['raw'] if 'raw' in data else data['epochs'] if 'epochs' in data else None
-        if inst is None:
-            raise ValueError("generate_html_report requires either 'raw' or 'epochs' in data")
 
         if 'preprocessing_steps' not in data:
             raise ValueError("generate_html_report requires 'preprocessing_steps' in data")
@@ -1382,8 +1377,11 @@ class EEGPreprocessingPipeline:
         elif len(data['preprocessing_steps']) == 0:
             raise ValueError("data['preprocessing_steps'] is empty. Cannot generate report without any preprocessing steps.")
 
-        picks = self._get_picks(inst.info, picks_params, excluded_channels)
-        inst = inst.copy().pick(picks=picks, exclude='bads')
+        # Get info from epochs if available, otherwise from raw
+        inst = data['raw'] if 'raw' in data else data['epochs'] if 'epochs' in data else None
+        if inst is None:
+            raise ValueError("generate_html_report requires either 'raw' or 'epochs' in data")
+
         preprocessing_steps = data['preprocessing_steps']
 
         html_report = mne.Report(title=f'Preprocessing Report - Subject {data["subject"]}')
@@ -1395,7 +1393,7 @@ class EEGPreprocessingPipeline:
         if len(bad_channels) > 0:
             logger.info(f"Adding bad channels topoplot with {len(bad_channels)} bad channels")
             fig = create_bad_channels_topoplot(inst.info, bad_channels)
-            
+
             if fig is not None:
                 # Add to report
                 html_report.add_figure(
@@ -1558,7 +1556,6 @@ class EEGPreprocessingPipeline:
 
         # ---------- Compare instances preprocessing (full recording) ----------
         for contrast in compare_instances:
-            
             inst_a_name = contrast['instance_a']['name']
             inst_a_label = contrast['instance_a']['label']
             inst_b_name = contrast['instance_b']['name']
@@ -1571,6 +1568,11 @@ class EEGPreprocessingPipeline:
             inst_b = data[inst_b_name]
 
             # Ensure channel alignment (same channel order)
+            picks = self._get_picks(
+                inst.info,
+                picks_params,
+                excluded_channels
+            )
             ch_names_a = sorted([inst_a.ch_names[pick] for pick in picks])
             ch_names_b = sorted([inst_b.ch_names[pick] for pick in picks])
             if set(ch_names_a) != set(ch_names_b):
