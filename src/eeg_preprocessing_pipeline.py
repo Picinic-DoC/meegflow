@@ -153,12 +153,10 @@ class EEGPreprocessingPipeline:
         str or list of str
             Pattern(s) to use with get_entity_vals include_match parameter.
         """
-        # Filter out None values from the lists (but remember if None was present)
-        has_none_session = sessions and None in sessions
         if subjects:
-            subjects = [s for s in subjects if s is not None]
+            subjects = [s if s is not None else '*' for s in subjects]
         if sessions:
-            sessions = [s for s in sessions if s is not None]
+            sessions = [s if s is not None else '*' for s in sessions]
         
         # If we have both subjects and sessions, create specific patterns
         if subjects and sessions:
