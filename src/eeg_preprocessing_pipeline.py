@@ -132,7 +132,70 @@ class EEGPreprocessingPipeline:
         if unknown:
             raise ValueError(f"Unknown pipeline steps in config: {unknown}")
 
-    def _get_entity_values(self, entity_key: str, entity_value: any) -> List[Union[str, None]]:
+    def _build_include_patterns(
+        self,
+        subjects: List[str] = None,
+        sessions: List[str] = None
+    ) -> Union[str, List[str]]:
+        """Build include_match patterns to narrow BIDS entity search.
+        
+        Parameters
+        ----------
+        subjects : list of str, optional
+            Known subject values to narrow the search.
+        sessions : list of str, optional
+            Known session values to narrow the search. If sessions were discovered
+            (not explicitly provided), patterns will include both session and 
+            non-session directories to handle subjects with and without sessions.
+        
+        Returns
+        -------
+        str or list of str
+            Pattern(s) to use with get_entity_vals include_match parameter.
+        """
+        # Filter out None values from the lists (but remember if None was present)
+        has_none_session = sessions and None in sessions
+        if subjects:
+            subjects = [s for s in subjects if s is not None]
+        if sessions:
+            sessions = [s for s in sessions if s is not None]
+        
+        # If we have both subjects and sessions, create specific patterns
+        if subjects and sessions:
+            patterns = []
+            # Add patterns for subjects with sessions
+            for sub in subjects:
+                for ses in sessions:
+                    patterns.append(f'sub-{sub}/ses-{ses}/')
+            # Also add patterns without sessions to catch subjects that don't use sessions
+            # This is important because get_entity_vals only returns sessions that exist,
+            # so we need to also search for files without the session entity
+            for sub in subjects:
+                patterns.append(f'sub-{sub}/')
+            return patterns
+        
+        # If we only have subjects, create subject-specific patterns
+        if subjects:
+            return [f'sub-{sub}/' for sub in subjects]
+        
+        # If we only have sessions, we still need to search all subjects
+        # but can narrow to specific sessions
+        if sessions:
+            patterns = []
+            for ses in sessions:
+                patterns.append(f'sub-*/ses-{ses}/')
+            return patterns
+        
+        # Default: search all subject directories
+        return 'sub-*/'
+
+    def _get_entity_values(
+        self, 
+        entity_key: str, 
+        entity_value: any,
+        subjects: List[str] = None,
+        sessions: List[str] = None
+    ) -> List[Union[str, None]]:
         """Get all unique values for a given BIDS entity in the dataset.
         
         Parameters
@@ -143,6 +206,10 @@ class EEGPreprocessingPipeline:
             The entity value(s) to process. If None, discovers all existing values
             from the BIDS dataset. If a string, returns it as a single-element list.
             If a list, returns it as-is.
+        subjects : list of str, optional
+            Known subject values to narrow the search. Only used when entity_value is None.
+        sessions : list of str, optional
+            Known session values to narrow the search. Only used when entity_value is None.
         
         Returns
         -------
@@ -157,12 +224,14 @@ class EEGPreprocessingPipeline:
             return entity_value
 
         if entity_value is None:
+            # Build include_match pattern based on known entity values to narrow search
+            include_patterns = self._build_include_patterns(subjects, sessions)
+            
             # Use get_entity_vals to find all existing values for this entity
-            # Only search within subject directories (sub-*/) for better performance
             all_values = get_entity_vals(
                 root=self.bids_root,
                 entity_key=entity_key,
-                include_match='sub-*/'
+                include_match=include_patterns
             )
             # Return the list of values, or [None] if no values found
             return list(all_values) if all_values else [None]
@@ -1790,10 +1859,17 @@ class EEGPreprocessingPipeline:
             Dictionary mapping subject -> list of results for each matching file.
         """
 
+        # First, get subjects (no dependencies)
         subjects = self._get_entity_values('subject', subjects)
-        sessions = self._get_entity_values('session', sessions)
-        tasks = self._get_entity_values('task', tasks)
-        acquisitions = self._get_entity_values('acquisition', acquisitions)
+        
+        # Then get sessions, passing subjects to narrow search
+        sessions = self._get_entity_values('session', sessions, subjects=subjects)
+        
+        # Get tasks, passing both subjects and sessions to narrow search
+        tasks = self._get_entity_values('task', tasks, subjects=subjects, sessions=sessions)
+        
+        # Get acquisitions, passing both subjects and sessions to narrow search
+        acquisitions = self._get_entity_values('acquisition', acquisitions, subjects=subjects, sessions=sessions)
 
         # print subjects, sessions, tasks, acquisitions
         logger.info(f"Subjects to process: {subjects}")
