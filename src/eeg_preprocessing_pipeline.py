@@ -134,7 +134,23 @@ class EEGPreprocessingPipeline:
             raise ValueError(f"Unknown pipeline steps in config: {unknown}")
 
     def _get_entity_values(self, entity_key: str, entity_value: any) -> List[Union[str, None]]:
-        """Get all unique values for a given BIDS entity in the dataset."""
+        """Get all unique values for a given BIDS entity in the dataset.
+        
+        Parameters
+        ----------
+        entity_key : str
+            The BIDS entity key (e.g., 'subject', 'task', 'session', 'acquisition').
+        entity_value : str | list of str | None
+            The entity value(s) to process. If None, discovers all existing values
+            from the BIDS dataset. If a string, returns it as a single-element list.
+            If a list, returns it as-is.
+        
+        Returns
+        -------
+        list of str or [None]
+            List of entity values to process. Returns [None] if entity_value is None
+            and no values are found in the dataset.
+        """
         if isinstance(entity_value, str):
             return [entity_value]
     
