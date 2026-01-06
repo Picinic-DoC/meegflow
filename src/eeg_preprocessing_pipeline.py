@@ -158,10 +158,11 @@ class EEGPreprocessingPipeline:
 
         if entity_value is None:
             # Use get_entity_vals to find all existing values for this entity
+            # Only search within subject directories (sub-*/) for better performance
             all_values = get_entity_vals(
                 root=self.bids_root,
                 entity_key=entity_key,
-                ignore_dirs=('derivatives', 'sourcedata')
+                include_match='sub-*/'
             )
             # Return the list of values, or [None] if no values found
             return list(all_values) if all_values else [None]
