@@ -87,12 +87,11 @@ import json
 import mne
 from mne.utils import logger
 import numpy as np
-from mne_bids import BIDSPath, read_raw_bids
+from mne_bids import BIDSPath, read_raw_bids, get_entity_vals
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 import adaptive_reject
 from collections import defaultdict
 from utils import NpEncoder
-import numpy as np
 import matplotlib.pyplot as plt
 
 class EEGPreprocessingPipeline:
@@ -133,17 +132,107 @@ class EEGPreprocessingPipeline:
         if unknown:
             raise ValueError(f"Unknown pipeline steps in config: {unknown}")
 
-    def _get_entity_values(self, entity_key: str, entity_value: any) -> List[Union[str, None]]:
-        """Get all unique values for a given BIDS entity in the dataset."""
+    def _build_include_patterns(
+        self,
+        subjects: List[str] = None,
+        sessions: List[str] = None
+    ) -> Union[str, List[str]]:
+        """Build include_match patterns to narrow BIDS entity search.
+        
+        Parameters
+        ----------
+        subjects : list of str, optional
+            Known subject values to narrow the search.
+        sessions : list of str, optional
+            Known session values to narrow the search. If sessions were discovered
+            (not explicitly provided), patterns will include both session and 
+            non-session directories to handle subjects with and without sessions.
+        
+        Returns
+        -------
+        str or list of str
+            Pattern(s) to use with get_entity_vals include_match parameter.
+        """
+        if subjects:
+            subjects = [s if s is not None else '*' for s in subjects]
+        if sessions:
+            sessions = [s if s is not None else '*' for s in sessions]
+        
+        # If we have both subjects and sessions, create specific patterns
+        if subjects and sessions:
+            patterns = []
+            # Add patterns for subjects with sessions
+            for sub in subjects:
+                for ses in sessions:
+                    patterns.append(f'sub-{sub}/ses-{ses}/')
+            # Also add patterns without sessions to catch subjects that don't use sessions
+            # This is important because get_entity_vals only returns sessions that exist,
+            # so we need to also search for files without the session entity
+            for sub in subjects:
+                patterns.append(f'sub-{sub}/')
+            return patterns
+        
+        # If we only have subjects, create subject-specific patterns
+        if subjects:
+            return [f'sub-{sub}/' for sub in subjects]
+        
+        # If we only have sessions, we still need to search all subjects
+        # but can narrow to specific sessions
+        if sessions:
+            patterns = []
+            for ses in sessions:
+                patterns.append(f'sub-*/ses-{ses}/')
+            return patterns
+        
+        # Default: search all subject directories
+        return 'sub-*/'
+
+    def _get_entity_values(
+        self, 
+        entity_key: str, 
+        entity_value: any,
+        subjects: List[str] = None,
+        sessions: List[str] = None
+    ) -> List[Union[str, None]]:
+        """Get all unique values for a given BIDS entity in the dataset.
+        
+        Parameters
+        ----------
+        entity_key : str
+            The BIDS entity key (e.g., 'subject', 'task', 'session', 'acquisition').
+        entity_value : str | list of str | None
+            The entity value(s) to process. If None, discovers all existing values
+            from the BIDS dataset. If a string, returns it as a single-element list.
+            If a list, returns it as-is.
+        subjects : list of str, optional
+            Known subject values to narrow the search. Only used when entity_value is None.
+        sessions : list of str, optional
+            Known session values to narrow the search. Only used when entity_value is None.
+        
+        Returns
+        -------
+        list of str or [None]
+            List of entity values to process. Returns [None] if entity_value is None
+            and no values are found in the dataset.
+        """
         if isinstance(entity_value, str):
             return [entity_value]
     
         if isinstance(entity_value, list):
             return entity_value
 
-        # TODO: restore get_entity_vals and think how to improve the acq and other parameters that may be usefull to group but not mandatory
         if entity_value is None:
-            return [None]
+            # Build include_match pattern based on known entity values to narrow search
+            include_patterns = self._build_include_patterns(subjects, sessions)
+            
+            # Use get_entity_vals to find all existing values for this entity
+            all_values = get_entity_vals(
+                root=self.bids_root,
+                entity_key=entity_key,
+                include_match=include_patterns
+            )
+            # Return the list of values, or [None] if no values found
+            return list(all_values) if all_values else [None]
 
         raise ValueError(f"Invalid type for entity '{entity_key}': {type(entity_value)}")
 
@@ -1374,13 +1463,14 @@ class EEGPreprocessingPipeline:
             raise ValueError("generate_html_report requires 'preprocessing_steps' in data")
         elif not isinstance(data['preprocessing_steps'], list):
             raise ValueError("data['preprocessing_steps'] must be a list")
-        elif len(data['preprocessing_steps']) == 0:
-            raise ValueError("data['preprocessing_steps'] is empty. Cannot generate report without any preprocessing steps.")
 
         # Get info from epochs if available, otherwise from raw
         inst = data['raw'] if 'raw' in data else data['epochs'] if 'epochs' in data else None
         if inst is None:
             raise ValueError("generate_html_report requires either 'raw' or 'epochs' in data")
+
+        # Compute picks for channel selection
+        picks = self._get_picks(inst.info, picks_params, excluded_channels)
 
         preprocessing_steps = data['preprocessing_steps']
 
@@ -1568,18 +1658,18 @@ class EEGPreprocessingPipeline:
             inst_b = data[inst_b_name]
 
             # Ensure channel alignment (same channel order)
-            picks = self._get_picks(
+            ch_names_picks = self._get_picks(
                 inst.info,
                 picks_params,
                 excluded_channels
             )
-            ch_names_a = sorted([inst_a.ch_names[pick] for pick in picks])
-            ch_names_b = sorted([inst_b.ch_names[pick] for pick in picks])
+            ch_names_a = sorted([inst_a.ch_names[pick] for pick in ch_names_picks])
+            ch_names_b = sorted([inst_b.ch_names[pick] for pick in ch_names_picks])
             if set(ch_names_a) != set(ch_names_b):
                 raise ValueError(f"compare_instances step: channel mismatch between '{inst_a}' and '{inst_b}' after picking")
 
-            raw_b = inst_b.copy().pick(picks=picks).reorder_channels(ch_names_a)
-            raw_a = inst_a.copy().pick(picks=picks).reorder_channels(ch_names_b)
+            raw_b = inst_b.copy().pick(picks=ch_names_picks).reorder_channels(ch_names_a)
+            raw_a = inst_a.copy().pick(picks=ch_names_picks).reorder_channels(ch_names_b)
 
             Xb = raw_b.get_data()
             Xa = raw_a.get_data()
@@ -1768,10 +1858,17 @@ class EEGPreprocessingPipeline:
             Dictionary mapping subject -> list of results for each matching file.
         """
 
+        # First, get subjects (no dependencies)
         subjects = self._get_entity_values('subject', subjects)
-        sessions = self._get_entity_values('session', sessions)
-        tasks = self._get_entity_values('task', tasks)
-        acquisitions = self._get_entity_values('acquisition', acquisitions)
+        
+        # Then get sessions, passing subjects to narrow search
+        sessions = self._get_entity_values('session', sessions, subjects=subjects)
+        
+        # Get tasks, passing both subjects and sessions to narrow search
+        tasks = self._get_entity_values('task', tasks, subjects=subjects, sessions=sessions)
+        
+        # Get acquisitions, passing both subjects and sessions to narrow search
+        acquisitions = self._get_entity_values('acquisition', acquisitions, subjects=subjects, sessions=sessions)
 
         # print subjects, sessions, tasks, acquisitions
         logger.info(f"Subjects to process: {subjects}")
