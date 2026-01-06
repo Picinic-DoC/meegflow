@@ -221,7 +221,7 @@ def create_preprocessing_steps_table(preprocessing_steps: List[Dict[str, Any]]) 
         HTML string containing the styled, collapsible table.
     """
     if not preprocessing_steps:
-        return None
+        return ""
     
     def format_value(value):
         """Format a value based on its type."""

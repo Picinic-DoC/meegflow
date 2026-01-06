@@ -1463,13 +1463,14 @@ class EEGPreprocessingPipeline:
             raise ValueError("generate_html_report requires 'preprocessing_steps' in data")
         elif not isinstance(data['preprocessing_steps'], list):
             raise ValueError("data['preprocessing_steps'] must be a list")
-        elif len(data['preprocessing_steps']) == 0:
-            raise ValueError("data['preprocessing_steps'] is empty. Cannot generate report without any preprocessing steps.")
 
         # Get info from epochs if available, otherwise from raw
         inst = data['raw'] if 'raw' in data else data['epochs'] if 'epochs' in data else None
         if inst is None:
             raise ValueError("generate_html_report requires either 'raw' or 'epochs' in data")
+
+        # Compute picks for channel selection
+        picks = self._get_picks(inst.info, picks_params, excluded_channels)
 
         preprocessing_steps = data['preprocessing_steps']
 
