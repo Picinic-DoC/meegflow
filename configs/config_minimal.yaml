@@ -33,6 +33,10 @@ pipeline:
     instance: raw
     channels_to_drop: ['E242', 'E243', 'E244', 'E245', 'E246', 'E247', 'E248', 'E249', 'E250', 'E251', 'E252', 'E253', 'E254', 'E255', 'E256', 'E67', 'E73', 'E68', 'E229', 'E210', 'E218', 'E228', 'E233', 'E219', 'E227', 'E232', 'E237', 'E225', 'E226', 'E231', 'E236', 'E230', 'E235', 'E240', 'E234', 'E239']
 
+  - name: copy_instance
+    from_instance: raw
+    to_instance: raw_before_cleaning
+
   - name: find_flat_channels
     threshold: 1.0e-12
 
@@ -70,9 +74,12 @@ pipeline:
     find_eog: true
     eog_channels: [E1, E18, E37, E54, E238, E241]
     eog_threshold: 0.4   # null => seuil auto MNE
-    measure: 'correlation' 
-    fit_l_freq: 1.0
-    find_ecg: false
+    eog_measure: 'correlation'
+    find_ecg: true
+    ecg_channels: [E2, E3]
+    ecg_threshold: 0.4   # null => seuil auto MNE
+    ecg_measure: 'correlation' 
+    ica_l_freq: 1.0
     #selected_indices: [0, 1, 2]  # Uncomment and set to manually select components to remove
     apply: true
   
@@ -153,6 +160,15 @@ pipeline:
   - name: generate_json_report
   
   - name: generate_html_report
+    compare_instances: 
+      - title: 'Before vs After Cleaning'
+        instance_a:
+          name: 'raw'
+          label: 'After Cleaning'
+        instance_b:
+          name: 'raw_before_cleaning'
+          label: 'Before Cleaning'
+
     plot_raw_kwargs:
       psd: true
       scalings:

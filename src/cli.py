@@ -57,7 +57,7 @@ import yaml
 from pathlib import Path
 from mne.utils import logger, set_log_file, set_log_level
 from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
-
+from utils import NpEncoder
 
 def _parse_args():
     parser = argparse.ArgumentParser(description='Run EEG preprocessing pipeline on one or more subjects.')
@@ -169,7 +169,7 @@ def main():
     output_json = Path(args.bids_root) / "derivatives" / "nice_preprocessing" / "pipeline_results.json"
     output_json.parent.mkdir(parents=True, exist_ok=True)
     with open(output_json, 'w') as f:
-        json.dump(results, f, indent=2)
+        json.dump(results, f, indent=2, cls=NpEncoder)
     logger.info(f"\nResults written to: {output_json}")
 
 

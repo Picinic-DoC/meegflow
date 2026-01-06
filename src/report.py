@@ -69,6 +69,7 @@ import numpy as np
 import mne
 from mne.utils import logger
 import matplotlib.pyplot as plt
+from utils import NpEncoder
 
 
 def collect_bad_channels_from_steps(preprocessing_steps: List[Dict[str, Any]]) -> List[str]:
@@ -96,6 +97,7 @@ def collect_bad_channels_from_steps(preprocessing_steps: List[Dict[str, Any]]) -
             elif isinstance(step_bad_channels, str):
                 bad_channels.append(step_bad_channels)
     
+    # TODO: replace by return list(set(bad_channels))
     # Return unique channels preserving order
     seen = set()
     unique_bad_channels = []
@@ -194,7 +196,8 @@ def create_bad_channels_topoplot(
         plt.tight_layout()
         
         return fig
-        
+
+    # TODO: refine exception handling to specific errors or remove
     except Exception as e:
         logger.warning(f"Failed to create bad channels topoplot: {e}")
         if 'fig' in locals():
@@ -225,13 +228,13 @@ def create_preprocessing_steps_table(preprocessing_steps: List[Dict[str, Any]]) 
         HTML string containing the styled, collapsible table.
     """
     if not preprocessing_steps:
-        return ""
+        return None
     
     def format_value(value):
         """Format a value based on its type."""
         if isinstance(value, dict):
             # Format dicts as prettified JSON with indent 4
-            return f'<pre style="margin: 0; background-color: #f8f9fa; padding: 8px; border-radius: 4px;">{json.dumps(value, indent=4)}</pre>'
+            return f'<pre style="margin: 0; background-color: #f8f9fa; padding: 8px; border-radius: 4px;">{json.dumps(value, indent=4, cls=NpEncoder)}</pre>'
         elif isinstance(value, list):
             # Format lists as bullet points
             if not value:

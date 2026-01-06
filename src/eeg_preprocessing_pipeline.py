@@ -91,8 +91,9 @@ from mne_bids import BIDSPath, read_raw_bids
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 import adaptive_reject
 from collections import defaultdict
-
-
+from utils import NpEncoder
+import numpy as np
+import matplotlib.pyplot as plt
 
 class EEGPreprocessingPipeline:
     def __init__(self, bids_root: Union[str, Path], output_root: Union[str, Path] = None, config: Dict[str, Any] = None):
@@ -103,6 +104,7 @@ class EEGPreprocessingPipeline:
         self.step_functions = {
             'strip_recording': self._step_strip_recording,
             'concatenate_recordings': self._step_concatenate_recordings,
+            'copy_instance': self._step_copy_instance,
             'set_montage': self._step_set_montage,
             'drop_unused_channels': self._step_drop_unused_channels,
             'bandpass_filter': self._step_bandpass_filter,
@@ -138,11 +140,11 @@ class EEGPreprocessingPipeline:
     
         if isinstance(entity_value, list):
             return entity_value
-        
+
         # TODO: restore get_entity_vals and think how to improve the acq and other parameters that may be usefull to group but not mandatory
         if entity_value is None:
             return [None]
-    
+
         raise ValueError(f"Invalid type for entity '{entity_key}': {type(entity_value)}")
 
     def _find_events_from_raw(self, raw, get_events_from='annotations', shortest_event=1, event_id='auto', stim_channel=None):
@@ -300,11 +302,27 @@ class EEGPreprocessingPipeline:
             data['raw'] = mne.concatenate_raws(data['all_raw'])
         else:
             data['raw'] = data['all_raw'][0]
-        
+
         data['preprocessing_steps'].append({
             'step': 'concatenate_recordings',
         })
         
+        return data
+
+    def _step_copy_instance(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
+        from_instance = step_config.get('from_instance', 'raw')
+        to_instance = step_config.get('to_instance', 'raw_cleaned')
+
+        if from_instance not in data:
+            raise ValueError(f"copy_instance step requires '{from_instance}' to be in data")
+
+        data[to_instance] = data[from_instance].copy()
+        data['preprocessing_steps'].append({
+            'step': 'copy_instance',
+            'from_instance': from_instance,
+            'to_instance': to_instance
+        })
+
         return data
 
     def _step_set_montage(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -743,7 +761,7 @@ class EEGPreprocessingPipeline:
             Manually specify component indices to exclude
         apply : bool, optional
             Apply ICA to remove artifacts (default: True)
-        
+
         Updates
         -------
         data['ica'] : mne.preprocessing.ICA
@@ -752,7 +770,7 @@ class EEGPreprocessingPipeline:
             If apply=True, artifacts are removed from raw data
         data['preprocessing_steps'] : list
             Appends step information including excluded components
-        
+
         Returns
         -------
         data : dict
@@ -761,38 +779,28 @@ class EEGPreprocessingPipeline:
         if 'raw' not in data:
             raise ValueError("ica step requires 'raw' in data")
 
-        raw = data['raw']  
-
         n_components = step_config.get('n_components', 20)
         random_state = step_config.get('random_state', 97)
         method = step_config.get('method', 'fastica')
         picks_params = step_config.get('picks', None)
         excluded_channels = step_config.get('excluded_channels', None)
-        measure = step_config.get('measure', 'correlation')  # not used currently
-        
-         # EOG config
-        default_eog_chs = ['E1', 'E18', 'E37', 'E54', 'E238', 'E241']
-        eog_channels = step_config.get('eog_channels', default_eog_chs)
-        if isinstance(eog_channels, str):
-            eog_channels = [eog_channels]
-        
-        # None => MNE automatic threshold ; float => fixed threshold
-        eog_threshold = step_config.get('eog_threshold', None)
-        
-        # --- Normalize eog_threshold for robustness ---
-        if isinstance(eog_threshold, str) and eog_threshold.lower() in ("none", "null", ""):
-            eog_threshold = None
+        ica_l_freq = step_config.get('ica_fit_l_freq', 1.0)
+        ica_h_freq = step_config.get('ica_fit_h_freq', None)
+        eog_measure = step_config.get('eog_measure', 'correlation')
+        eog_threshold = step_config.get('eog_threshold', 'auto')
+        eog_channels = step_config.get('eog_channels', None)
+        eog_l_freq = step_config.get('eog_l_freq', 1.0)
+        eog_h_freq = step_config.get('eog_h_freq', 10.0)
+        ecg_measure = step_config.get('ecg_measure', 'correlation')
+        ecg_threshold = step_config.get('ecg_threshold', 'auto')
+        ecg_channels = step_config.get('ecg_channels', None)
+        ecg_l_freq = step_config.get('ecg_l_freq', 1.0)
+        ecg_h_freq = step_config.get('ecg_h_freq', 10.0)
+        selected_indices = step_config.get('selected_indices', None)
+        apply = step_config.get('apply', True)
 
+        raw = data['raw'].copy().filter(l_freq=ica_l_freq, h_freq=ica_h_freq)
 
-        # --- Ensure EOG channels exist and are typed as EOG ---
-        present_eog = [ch for ch in eog_channels if ch in raw.ch_names]
-        if present_eog:
-            try:
-                raw.set_channel_types({ch: 'eog' for ch in present_eog})
-            except Exception:
-                pass   
-
-        
         # --- Fit ICA on EEG only (your _get_picks already defaults to eeg=True, eog=False) ---
         ica = mne.preprocessing.ICA(
             n_components=n_components,
@@ -803,91 +811,158 @@ class EEGPreprocessingPipeline:
 
         # Compute picks if provided
         picks = self._get_picks(raw.info, picks_params, excluded_channels)
-        
-        # --- Key improvement: fit ICA on a 1 Hz high-pass copy (recommended by MNE) ---
-        fit_l_freq = step_config.get('ica_fit_l_freq', 1.0)  # allow override if needed
-        if fit_l_freq is not None and fit_l_freq > 0:
-            raw_for_ica = raw.copy().filter(l_freq=fit_l_freq, h_freq=None)
-        else:
-            raw_for_ica = raw
 
-        ica.fit(raw_for_ica, picks=picks)
-        
+        # Fit ICA
+        ica.fit(raw, picks=picks)
+
         excluded_components = defaultdict(list)
+        eog_detection_report = None
+        ecg_detection_report = None
 
-        # --- Auto-detect EOG-related components (auto threshold if None) ---
-        eog_indices, eog_scores = [], None
-        if step_config.get('find_eog', False) and len(present_eog) > 0:
-            try:
-                if eog_threshold is None:
-                    # AUTO: do not pass threshold at all (compatibility with your MNE)
-                    eog_indices, eog_scores = ica.find_bads_eog(
-                        raw,                 # use the actual raw for scoring (fine)
-                        ch_name=present_eog, # your explicit EOG channels
-                        measure=measure
-                    )
-                else:
-                    # FIXED THRESHOLD
-                    eog_indices, eog_scores = ica.find_bads_eog(
-                        raw,                 # use the actual raw for scoring (fine)
-                        ch_name=present_eog, # your explicit EOG channels
-                        threshold=float(eog_threshold),
-                        measure=measure
-                    )   
-                    
-                if eog_indices:
-                    for idx in eog_indices:
-                        excluded_components[int(idx)].append('eog')
-                    ica.exclude = sorted(set(ica.exclude).union(set(map(int, eog_indices))))
-            except Exception as e:
-                logger.warning(f"EOG ICA detection failed: {e}")
+        # EOG
+        if step_config.get('find_eog', False):
+
+            if eog_channels is None:
+                eog_channels = mne.pick_types(
+                    raw.info,
+                    eog=True,
+                    exclude='bads'
+                )
+
+            if isinstance(eog_channels, str):
+                eog_channels = [eog_channels]
+
+            if eog_channels is None or len(eog_channels) == 0:
+                raise ValueError("No eog_channels on instance and no channel selected in the config. Can't perform automatic EOG ICA without EOG channels.")
+
+            present_eog = [ch for ch in eog_channels if ch in raw.ch_names]
+            if len(present_eog) == 0:
+                raise ValueError('All EOG channels from config are not in the instance.')
+            
+            if len(present_eog) < len(eog_channels):
+                non_existent_eog = [ch for ch in eog_channels if ch not in raw.ch_names]
+                logger.warning(f'The following selected EOG channels are not in the instance: {non_existent_eog}')
+
+            eog_indices = []
+            eog_scores = []
+            for ch_name in present_eog:
+                cur_eog_indices, cur_eog_scores = ica.find_bads_eog(
+                    raw,
+                    ch_name=ch_name,
+                    measure=eog_measure,
+                    l_freq=eog_l_freq,
+                    h_freq=eog_h_freq,
+                    threshold=eog_threshold
+                )
+
+                eog_indices.extend(cur_eog_indices)
+                eog_scores.append(
+                    cur_eog_scores.tolist()
+                    if isinstance(cur_eog_scores, np.ndarray)
+                    else cur_eog_scores
+                )
+
+            eog_indices = list(set(eog_indices))  # Unique indices
+
+            for idx in eog_indices:
+                excluded_components[idx].append('eog')
+
+            eog_detection_report = {
+                'eog_channels_requested': eog_channels,
+                'eog_channels_present': present_eog,
+                'eog_l_freq': eog_l_freq,
+                'eog_h_freq': eog_h_freq,
+                'eog_measure': eog_measure,
+                'eog_threshold': eog_threshold,
+                'eog_excluded_components': eog_indices,
+                'eog_scores': eog_scores,
+            }
 
         # ECG
         if step_config.get('find_ecg', False):
-            try:
-                ecg_indices, ecg_scores = ica.find_bads_ecg(data['raw'])
-                if ecg_indices:
-                    ica.exclude.extend(ecg_indices)
-                    for idx in ecg_indices:
-                        excluded_components[idx].append('ecg')
-            except Exception:
-                pass
-        
+
+            if ecg_channels is None:
+                ecg_channels = mne.pick_types(
+                    raw.info,
+                    ecg=True,
+                    exclude='bads'
+                )
+
+            if isinstance(ecg_channels, str):
+                ecg_channels = [ecg_channels]
+
+            if ecg_channels is None or len(ecg_channels) == 0:
+                raise ValueError("No ecg_channels on instance and no channel selected in the config. Can't perform automatic ECG ICA without ECG channels.")
+
+            present_ecg = [ch for ch in ecg_channels if ch in raw.ch_names]
+            if len(present_ecg) == 0:
+                raise ValueError('All ECG channels from config are not in the instance.')
+            
+            if len(present_ecg) < len(ecg_channels):
+                non_existent_dropped_ecg = [ch for ch in ecg_channels if ch not in raw.ch_names]
+                logger.warning(f'The following selected ECG channels are not in the instance: {non_existent_dropped_ecg}')
+
+            ecg_indices = []
+            ecg_scores = []
+            for ch_name in present_ecg:
+                cur_ecg_indices, cur_ecg_scores = ica.find_bads_ecg(
+                    raw,
+                    ch_name=ch_name,
+                    measure=ecg_measure,
+                    l_freq=ecg_l_freq,
+                    h_freq=ecg_h_freq,
+                    threshold=ecg_threshold
+                )
+
+                ecg_indices.extend(cur_ecg_indices)
+                ecg_scores.append(
+                    cur_ecg_scores.tolist()
+                    if isinstance(cur_ecg_scores, np.ndarray)
+                    else cur_ecg_scores
+                )
+            
+            ecg_indices = list(set(ecg_indices))  # Unique indices
+
+            for idx in ecg_indices:
+                excluded_components[idx].append('ecg')
+            
+            ecg_detection_report = {
+                'ecg_channels_requested': ecg_channels,
+                'ecg_channels_present': present_ecg,
+                'ecg_l_freq': ecg_l_freq,
+                'ecg_h_freq': ecg_h_freq,
+                'ecg_measure': ecg_measure,
+                'ecg_threshold': ecg_threshold,
+                'ecg_excluded_components': ecg_indices,
+                'ecg_scores': ecg_scores,
+            }
+
         # Manual selection optional
-        if step_config.get('selected_indices', None):
-            selected_indices = step_config.get('selected_indices')
-            ica.exclude.extend(selected_indices)
+        if selected_indices is not None:
             for idx in selected_indices:
                 excluded_components[idx].append('selected')
 
-        # Apply ICA to remove artifacts if requested
-        if step_config.get('apply', True):
-            data['raw_before_cleaning'] = raw.copy()
-            ica.apply(raw)
+        ica.exclude = sorted(excluded_components.keys())
 
-        data['ica'] = ica
+        # Apply ICA to remove artifacts if requested
+        if apply:
+            ica.apply(raw)
         
-        # Store audit info for the HTML report step
-        data['ica_audit'] = {
-            'ica_fit_l_freq': fit_l_freq,
-            'eog_channels_requested': eog_channels,
-            'eog_channels_present': present_eog,
-            'eog_threshold': eog_threshold,
-            'eog_indices': [int(i) for i in (eog_indices or [])],
-            'eog_scores': eog_scores.tolist() if hasattr(eog_scores, 'tolist') else (list(eog_scores) if eog_scores is not None else None),
-        }
+        data['ica'] = ica
 
         data['preprocessing_steps'].append({
             'step': 'ica',
             'n_components': n_components,
+            'random_state': random_state,
             'method': method,
+            'picks': picks_params,
             'excluded_channels': excluded_channels,
-            'excluded_components': len(ica.exclude),
-            'component_types': excluded_components,
-            'apply': step_config.get('apply', True),
-            'eog_channels_present': present_eog,
-            'eog_threshold': eog_threshold,
-            'ica_fit_l_freq': fit_l_freq,
+            'ica_l_freq': ica_l_freq,
+            'ica_h_freq': ica_h_freq,
+            'eog_detection': eog_detection_report,
+            'ecg_detection': ecg_detection_report,
+            'excluded_components': ica.exclude,
+            'apply': apply,
         })
 
         return data
@@ -1271,16 +1346,6 @@ class EEGPreprocessingPipeline:
         # Ensure directory exists
         bids_path.mkdir(exist_ok=True)
 
-        class NpEncoder(json.JSONEncoder):
-            def default(self, obj):
-                if isinstance(obj, np.integer):
-                    return int(obj)
-                elif isinstance(obj, np.floating):
-                    return float(obj)
-                elif isinstance(obj, np.ndarray):
-                    return obj.tolist()
-                return super().default(obj)
-
         with open(bids_path.fpath, 'w') as f:
             json.dump(report, f, indent=2, cls=NpEncoder)
 
@@ -1290,7 +1355,6 @@ class EEGPreprocessingPipeline:
     def _step_generate_html_report(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         
         """Generate HTML reports."""
-        import matplotlib.pyplot as plt
         from report import (
             collect_bad_channels_from_steps,
             create_bad_channels_topoplot,
@@ -1299,273 +1363,291 @@ class EEGPreprocessingPipeline:
 
         picks_params = step_config.get('picks', None)
         excluded_channels = step_config.get('excluded_channels', None)
-        
-        # Get info from epochs if available, otherwise from raw
-        info = None
-        if 'epochs' in data and data['epochs'] is not None:
-            info = data['epochs'].info
-        elif 'raw' in data and data['raw'] is not None:
-            info = data['raw'].info
-        else:
-            raise ValueError("generate_html_report requires either 'raw' or 'epochs' in data")
-        
-        picks = self._get_picks(info, picks_params, excluded_channels)
+        compare_instances = step_config.get('compare_instances', [])
         plot_raw_kwargs = step_config.get('plot_raw_kwargs', {})
         plot_ica_kwargs = step_config.get('plot_ica_kwargs', {})
         plot_events_kwargs = step_config.get('plot_events_kwargs', {})
         plot_epochs_kwargs = step_config.get('plot_epochs_kwargs', {})
         plot_evokeds_kwargs = step_config.get('plot_evokeds_kwargs', {})
-
-        raw = data.get('raw', None)
-        if raw is not None:
-            raw = raw.copy().pick(picks=picks, exclude='bads')
         
-        epochs = data.get('epochs', None)
-        if epochs is not None:
-            epochs = epochs.copy().pick(picks=picks, exclude='bads')
+        # Get info from epochs if available, otherwise from raw
+        inst = data['raw'] if 'raw' in data else data['epochs'] if 'epochs' in data else None
+        if inst is None:
+            raise ValueError("generate_html_report requires either 'raw' or 'epochs' in data")
+
+        if 'preprocessing_steps' not in data:
+            raise ValueError("generate_html_report requires 'preprocessing_steps' in data")
+        elif not isinstance(data['preprocessing_steps'], list):
+            raise ValueError("data['preprocessing_steps'] must be a list")
+        elif len(data['preprocessing_steps']) == 0:
+            raise ValueError("data['preprocessing_steps'] is empty. Cannot generate report without any preprocessing steps.")
+
+        picks = self._get_picks(inst.info, picks_params, excluded_channels)
+        inst = inst.copy().pick(picks=picks, exclude='bads')
+        preprocessing_steps = data['preprocessing_steps']
 
         html_report = mne.Report(title=f'Preprocessing Report - Subject {data["subject"]}')
 
         # Add bad channels topoplot section
-        try:
-            # Collect bad channels from all preprocessing steps
-            bad_channels = collect_bad_channels_from_steps(
-                data.get('preprocessing_steps', [])
-            )
-            
-            # Get info from raw to use its montage
-            info = None
-            if 'raw' in data and data['raw'] is not None:
-                info = data['raw'].info
-            elif 'epochs' in data and data['epochs'] is not None:
-                info = data['epochs'].info
-            
-            # Create topoplot if we have bad channels and info
-            if info is not None and bad_channels:
-                fig = create_bad_channels_topoplot(info, bad_channels)
-                
-                if fig is not None:
-                    # Add to report
-                    html_report.add_figure(
-                        fig=fig,
-                        title='Bad Channels',
-                        caption=f'Topoplot showing {len(bad_channels)} bad channels marked with red crosses'
-                    )
-                    plt.close(fig)
-        except Exception as e:
-            # If adding bad channels topoplot fails, continue without stopping the pipeline
-            logger.warning(f"Failed to add bad channels topoplot: {e}")
-            pass
+        bad_channels = collect_bad_channels_from_steps(preprocessing_steps)
 
-        # Add preprocessing steps table section
-        try:
-            if 'preprocessing_steps' in data and len(data['preprocessing_steps']) > 0:
-                # Create HTML table with collapsible rows
-                html_content = create_preprocessing_steps_table(data['preprocessing_steps'])
-                
-                if html_content:
-                    # Add the HTML table to the report
-                    html_report.add_html(
-                        html=html_content,
-                        title='Preprocessing Steps',
-                    )
-        except Exception as e:
-            # If adding preprocessing steps table fails, continue without stopping the pipeline
-            logger.warning(f"Failed to add preprocessing steps table: {e}")
-            pass
-
-        if data.get('ica', None) is not None and raw is not None:
-            try:
-                html_report.add_ica(
-                    ica=data['ica'],
-                    title='ICA Components',
-                    inst=raw,
-                    **plot_ica_kwargs
+        # Create topoplot if we have bad channels and info
+        if len(bad_channels) > 0:
+            logger.info(f"Adding bad channels topoplot with {len(bad_channels)} bad channels")
+            fig = create_bad_channels_topoplot(inst.info, bad_channels)
+            
+            if fig is not None:
+                # Add to report
+                html_report.add_figure(
+                    fig=fig,
+                    title='Bad Channels',
+                    caption=f'Topoplot showing {len(bad_channels)} bad channels marked with red crosses'
                 )
-            except Exception:
-                # If adding ICA fails, continue without stopping the pipeline
-                pass
-
-        # ---------- ICA EOG audit section (custom) ----------
-        if data.get('ica', None) is not None and data.get('raw', None) is not None:
-            try:
-                import matplotlib.pyplot as plt
-                import numpy as np
-
-                audit = data.get('ica_audit', {}) or {}
-                eog_idx = audit.get('eog_indices', []) or []
-                eog_scores = audit.get('eog_scores', None)
-
-                # Use the FULL raw (not the picked one), otherwise plot_properties can break
-                raw_for_ica = data['raw']
-
-                if len(eog_idx) > 0:
-                    # 1) Scores visualization (handles both 1D and multi-EOG 2D scores)
-                    if eog_scores is not None:
-                        scores = np.array(eog_scores, dtype=float)
-
-                        # If multi-EOG scores: shape = (n_eog_ch, n_components) -> show heatmap + aggregated barplot
-                        if scores.ndim == 2:
-                            # Heatmap (EOG channels x ICA components)
-                            fig_hm = plt.figure()
-                            ax = fig_hm.add_subplot(111)
-
-                            im = ax.imshow(scores, aspect="auto", origin="lower")
-
-                            n_components = scores.shape[1]
-
-                            # X axis: ICA components as discrete labels 1..N
-                            ax.set_xticks(np.arange(n_components))
-                            ax.set_xticklabels(np.arange(n_components))
-
-                            ax.set_xlabel("ICA component")
-                            ax.set_ylabel("EOG channel")
-
-                            eog_names = (
-                                audit.get("eog_channels_present", None)
-                                or audit.get("eog_channels_requested", None)
-                                or []
-                            )
-                            if isinstance(eog_names, list) and len(eog_names) == scores.shape[0]:
-                                ax.set_yticks(np.arange(len(eog_names)))
-                                ax.set_yticklabels(eog_names)
-
-                            ax.set_title("EOG scores (per EOG channel × ICA component)")
-
-                            fig_hm.colorbar(im, ax=ax, shrink=0.8, label="EOG score")
-
-                            html_report.add_figure(fig=fig_hm, title="ICA – EOG scores heatmap")
-                            plt.close(fig_hm)
-
-
-                            # Aggregate to 1 score per component for barplot
-                            scores_1d = np.max(np.abs(scores), axis=0)
-
-                        else:
-                            # 1D scores: shape = (n_components,)
-                            scores_1d = np.abs(scores)
-
-                        # Barplot (always 1D after aggregation if needed)
-                        fig1 = plt.figure()
-                        ax = fig1.add_subplot(111)
-                        ax.bar(np.arange(len(scores_1d)), scores_1d)
-                        ax.set_xlabel("ICA component")
-                        ax.set_ylabel("max |EOG score| across EOG channels" if (eog_scores is not None and np.array(eog_scores).ndim == 2) else "|EOG score|")
-                        ax.set_title(f"EOG scores (selected: {eog_idx})")
-                        html_report.add_figure(fig=fig1, title="ICA – EOG scores")
-                        plt.close(fig1)
-
-                    # 2) Topo + time course + correlation (MNE plot_properties)
-                    figs = data['ica'].plot_properties(raw_for_ica, picks=eog_idx, show=False)
-                    if not isinstance(figs, list):
-                        figs = [figs]
-                    for k, f in enumerate(figs):
-                        html_report.add_figure(fig=f, title=f"ICA – EOG component properties #{k+1}")
-                        plt.close(f)
-
-                else:
-                    html_report.add_html(
-                        html="<p><b>ICA – EOG detection:</b> no EOG-related components detected.</p>",
-                        title="ICA – EOG detection"
-                    )
-
-            except Exception as e:
-                logger.warning(f"Failed to add ICA EOG detection section: {e}")
-
-        # ----------------------------------------------------
-
-        # ---------- Before vs After preprocessing (full recording) ----------
-        try:
-            raw_before = data.get('raw_before_cleaning', None)
-            raw_after_full = data.get('raw', None)  # full cleaned raw (not picked)
-
-            if raw_before is not None and raw_after_full is not None:
-                import numpy as np
-                import matplotlib.pyplot as plt
-
-                # Use EEG picks only, exclude bads based on the cleaned raw info
-                eeg_picks = mne.pick_types(raw_after_full.info, eeg=True, exclude='bads')
-
-                # Ensure channel alignment (same channel order)
-                chs = [raw_after_full.ch_names[p] for p in eeg_picks]
-                raw_b = raw_before.copy().pick_channels(chs, ordered=True)
-                raw_a = raw_after_full.copy().pick_channels(chs, ordered=True)
-
-                Xb = raw_b.get_data()
-                Xa = raw_a.get_data()
-                times = raw_a.times
-
-                # Metrics over full recording
-                gfp_b = np.std(Xb, axis=0)
-                gfp_a = np.std(Xa, axis=0)
-
-                mean_b = np.mean(Xb, axis=0)
-                mean_a = np.mean(Xa, axis=0)
-
-                diff_abs = np.mean(np.abs(Xb - Xa), axis=0)
-
-                fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True)
-
-                axes[0].plot(times, gfp_b, color='red', alpha=0.35, label='Before cleaning')
-                axes[0].plot(times, gfp_a, color='black', linewidth=1.0, label='After cleaning')
-                axes[0].set_title('EEG Global Field Power (full recording)')
-                axes[0].legend(loc='upper right')
-
-                axes[1].plot(times, mean_b, color='red', alpha=0.35, label='Before cleaning')
-                axes[1].plot(times, mean_a, color='black', linewidth=1.0, label='After cleaning')
-                axes[1].set_title('Mean EEG across channels (full recording)')
-
-                axes[2].plot(times, diff_abs, color='purple', linewidth=1.0)
-                axes[2].set_title('Mean absolute difference |before − after| (full recording)')
-                axes[2].set_xlabel('Time (s)')
-
-                fig.tight_layout()
-                html_report.add_figure(fig=fig, title='Before vs After preprocessing (full recording)')
                 plt.close(fig)
 
-        except Exception as e:
-            logger.warning(f"Failed to add full before/after preprocessing figure: {e}")
-# -------------------------------------------------------------------
+        # Add preprocessing steps table section
+        html_content = create_preprocessing_steps_table(data['preprocessing_steps'])
 
-        if raw is not None:
-            try:
-                html_report.add_raw(
-                    raw=raw,
-                    title='Clean Raw Data',
-                    **plot_raw_kwargs
-                )
-            except Exception:
-                pass
+        # ---------- Preprocessing steps ----------
+        if html_content is not None:
+            # Add the HTML table to the report
+            html_report.add_html(
+                html=html_content,
+                title='Preprocessing Steps',
+            )
 
+        # ---------- ICA ----------
+        if data.get('ica', None) is not None:
+
+            section = "ICA"
+
+            html_report.add_ica(
+                ica=data['ica'],
+                title='ICA Components',
+                inst=None,
+                **plot_ica_kwargs
+            )
+
+            ica_step = [step for step in preprocessing_steps if step['step'] == 'ica']
+            ica_step = ica_step[-1] if len(ica_step) > 0 else {}
+            eog_step_report = ica_step.get('eog_detection', {})
+            eog_idx = eog_step_report.get('eog_excluded_components', []) or []
+            eog_scores = eog_step_report.get('eog_scores', None)
+            ecg_step_report = ica_step.get('ecg_detection', {})
+            ecg_idx = ecg_step_report.get('ecg_excluded_components', []) or []
+            ecg_scores = ecg_step_report.get('ecg_scores', None)
+
+            if len(eog_idx) > 0:
+
+                if eog_scores is not None:
+                    scores = np.array(eog_scores, dtype=float)
+
+                    if scores.ndim == 1:
+                        scores = scores.reshape(-1, 1)  # Make it 2D for uniform processing
+
+                    # Heatmap (EOG channels x ICA components)
+                    fig = plt.figure()
+                    ax = fig.add_subplot(111)
+
+                    im = ax.imshow(scores, aspect="auto", origin="lower")
+
+                    n_components = scores.shape[1]
+
+                    # X axis: ICA components as discrete labels 1..N
+                    ax.set_xticks(np.arange(n_components))
+                    ax.set_xticklabels(np.arange(n_components))
+
+                    ax.set_xlabel("ICA component")
+                    ax.set_ylabel("EOG channel")
+
+                    eog_names = (
+                        eog_step_report.get("eog_channels_present", None)
+                        or eog_step_report.get("eog_channels_requested", None)
+                        or []
+                    )
+                    if isinstance(eog_names, list) and len(eog_names) == scores.shape[0]:
+                        ax.set_yticks(np.arange(len(eog_names)))
+                        ax.set_yticklabels(eog_names)
+
+                    ax.set_title("EOG scores (per EOG channel × ICA component)")
+
+                    fig.colorbar(im, ax=ax, shrink=0.8, label="EOG score")
+
+                    html_report.add_figure(
+                        fig=fig,
+                        title="ICA - EOG scores heatmap",
+                        section='ICA - EOG'
+                    )
+                    plt.close(fig)
+
+                    # Aggregate to 1 score per component for barplot
+                    scores_1d = np.max(np.abs(scores), axis=0)
+
+                    # Barplot (always 1D after aggregation if needed)
+                    fig1 = plt.figure()
+                    ax = fig1.add_subplot(111)
+                    ax.bar(np.arange(len(scores_1d)), scores_1d)
+                    ax.set_xlabel("ICA component")
+                    ax.set_ylabel("max |EOG score| across EOG channels" if (eog_scores is not None and np.array(eog_scores).ndim == 2) else "|EOG score|")
+                    ax.set_title(f"EOG scores (selected: {eog_idx})")
+                    html_report.add_figure(
+                        fig=fig1,
+                        title="ICA - EOG scores",
+                        section='ICA - EOG'
+                    )
+                    plt.close(fig1)
+            
+            if len(ecg_idx) > 0:
+
+                if ecg_scores is not None:
+                    scores = np.array(ecg_scores, dtype=float)
+
+                    if scores.ndim == 1:
+                        scores = scores.reshape(-1, 1)  # Make it 2D for uniform processing
+
+                    # Heatmap (ECG channels x ICA components)
+                    fig = plt.figure()
+                    ax = fig.add_subplot(111)
+
+                    im = ax.imshow(scores, aspect="auto", origin="lower")
+
+                    n_components = scores.shape[1]
+
+                    # X axis: ICA components as discrete labels 1..N
+                    ax.set_xticks(np.arange(n_components))
+                    ax.set_xticklabels(np.arange(n_components))
+
+                    ax.set_xlabel("ICA component")
+                    ax.set_ylabel("ECG channel")
+
+                    ecg_names = (
+                        ecg_step_report.get("ecg_channels_present", None)
+                        or ecg_step_report.get("ecg_channels_requested", None)
+                        or []
+                    )
+                    if isinstance(ecg_names, list) and len(ecg_names) == scores.shape[0]:
+                        ax.set_yticks(np.arange(len(ecg_names)))
+                        ax.set_yticklabels(ecg_names)
+
+                    ax.set_title("ECG scores (per ECG channel × ICA component)")
+                    fig.colorbar(im, ax=ax, shrink=0.8, label="ECG score")
+
+                    html_report.add_figure(
+                        fig=fig,
+                        title="ICA - ECG scores heatmap",
+                        section='ICA - EOG'
+                    )
+                    plt.close(fig)
+
+                    # Aggregate to 1 score per component for barplot
+                    scores_1d = np.max(np.abs(scores), axis=0)
+
+                    # Barplot (always 1D after aggregation if needed)
+                    fig1 = plt.figure()
+                    ax = fig1.add_subplot(111)
+                    ax.bar(np.arange(len(scores_1d)), scores_1d)
+                    ax.set_xlabel("ICA component")
+                    ax.set_ylabel("max |ECG score| across ECG channels" if (ecg_scores is not None and np.array(ecg_scores).ndim == 2) else "|ECG score|")
+                    ax.set_title(f"ECG scores (selected: {ecg_idx})")
+                    html_report.add_figure(
+                        fig=fig1,
+                        title="ICA - ECG scores",
+                        section='ICA - EOG'
+                    )
+                    plt.close(fig1)
+
+        # ---------- Compare instances preprocessing (full recording) ----------
+        for contrast in compare_instances:
+            
+            inst_a_name = contrast['instance_a']['name']
+            inst_a_label = contrast['instance_a']['label']
+            inst_b_name = contrast['instance_b']['name']
+            inst_b_label = contrast['instance_b']['label']
+
+            if inst_a_name not in data or inst_b_name not in data:
+                raise ValueError(f"compare_instances step requires both '{inst_a_name}' and '{inst_b_name}' in data")
+
+            inst_a = data[inst_a_name]
+            inst_b = data[inst_b_name]
+
+            # Ensure channel alignment (same channel order)
+            ch_names_a = sorted([inst_a.ch_names[pick] for pick in picks])
+            ch_names_b = sorted([inst_b.ch_names[pick] for pick in picks])
+            if set(ch_names_a) != set(ch_names_b):
+                raise ValueError(f"compare_instances step: channel mismatch between '{inst_a}' and '{inst_b}' after picking")
+
+            raw_b = inst_a.copy().pick(picks=picks).reorder_channels(ch_names_a)
+            raw_a = inst_b.copy().pick(picks=picks).reorder_channels(ch_names_b)
+
+            Xb = raw_b.get_data()
+            Xa = raw_a.get_data()
+            times = raw_a.times
+
+            # Metrics over full recording
+            gfp_b = np.std(Xb, axis=0)
+            gfp_a = np.std(Xa, axis=0)
+
+            mean_b = np.mean(Xb, axis=0)
+            mean_a = np.mean(Xa, axis=0)
+
+            diff_abs = np.mean(np.abs(Xb - Xa), axis=0)
+
+            fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True)
+
+            axes[0].plot(times, gfp_b, color='red', alpha=0.35, label=inst_b_label)
+            axes[0].plot(times, gfp_a, color='black', linewidth=1.0, label=inst_a_label)
+            axes[0].set_title('EEG Global Field Power (full recording)')
+            axes[0].legend(loc='upper right')
+
+            axes[1].plot(times, mean_b, color='red', alpha=0.35, label=inst_b_label)
+            axes[1].plot(times, mean_a, color='black', linewidth=1.0, label=inst_a_label)
+            axes[1].set_title('Mean EEG across channels (full recording)')
+            axes[0].legend(loc='upper right')
+
+            axes[2].plot(times, diff_abs, color='purple', linewidth=1.0)
+            axes[2].set_title(f'Mean absolute difference |{inst_a_label} - {inst_b_label}| (full recording)')
+            axes[2].set_xlabel('Time (s)')
+
+            fig.tight_layout()
+            html_report.add_figure(
+                fig=fig,
+                title=contrast['title'],
+                section='Contrasts'
+            )
+            plt.close(fig)
+
+        # ---------- Cleaned Raw report ----------
+        if data.get('raw', None) is not None:
+            html_report.add_raw(
+                raw=data['raw'],
+                title='Clean Raw Data',
+                **plot_raw_kwargs
+            )
+
+        # ---------- Events report ----------
         if 'events' in data and data['events'] is not None:
-            try:
-                html_report.add_events(
-                    events=data['events'],
-                    event_id=data.get('event_id', None),
-                    sfreq=data['events_sfreq'],
-                    title='Found Events',
-                    **plot_events_kwargs
-                )
-            except Exception:
-                pass
+            html_report.add_events(
+                events=data['events'],
+                event_id=data.get('event_id', None),
+                sfreq=data['events_sfreq'],
+                title='Found Events',
+                **plot_events_kwargs
+            )
 
-        if 'epochs' in data and data['epochs'] is not None:
+        # ---------- Cleaned Epochs report ----------
+        if data.get('epochs', None) is not None:
 
-            try:
-
-                html_report.add_epochs(
-                    epochs=epochs,
-                    title='Clean Epochs',
-                    **plot_epochs_kwargs
-                )
-                
-                html_report.add_evokeds(
-                    evokeds=epochs.average(by_event_type=True),
-                    n_time_points=step_config.get('n_time_points', None),
-                    **plot_evokeds_kwargs
-                )
-            except Exception:
-                pass
+            html_report.add_epochs(
+                epochs=data['epochs'],
+                title='Clean Epochs',
+                **plot_epochs_kwargs
+            )
+            
+            html_report.add_evokeds(
+                evokeds=data['epochs'].average(by_event_type=True),
+                n_time_points=step_config.get('n_time_points', None),
+                **plot_evokeds_kwargs
+            )
 
         # Derivatives root for this pipeline
         deriv_root = self.bids_root / "derivatives" / "nice_preprocessing" / "reports"
@@ -1728,6 +1810,10 @@ class EEGPreprocessingPipeline:
                 )
 
                 all_raw_paths = list(pb.match(ignore_nosub=True))
+                if len(all_raw_paths) == 0:
+                    logger.warning(f"No files found for {subject} - {session} - {task} - {acquisition}, skipping.")
+                    continue
+
                 logger.info(f"Found {len(all_raw_paths)} recording(s) for {subject} - {session} - {task} - {acquisition} to process together.")
 
                 # Get pipeline steps for this recording's progress bar
