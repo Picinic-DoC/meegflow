@@ -959,8 +959,8 @@ class EEGPreprocessingPipeline:
             'excluded_channels': excluded_channels,
             'ica_l_freq': ica_l_freq,
             'ica_h_freq': ica_h_freq,
-            'eog_detection': eog_detection_report,
-            'ecg_detection': ecg_detection_report,
+            'eog_detection': eog_detection_report or {},
+            'ecg_detection': ecg_detection_report or {},
             'excluded_components': ica.exclude,
             'apply': apply,
         })
@@ -1434,7 +1434,7 @@ class EEGPreprocessingPipeline:
             eog_idx = eog_step_report.get('eog_excluded_components', []) or []
             eog_scores = eog_step_report.get('eog_scores', None)
             ecg_step_report = ica_step.get('ecg_detection', {})
-            ecg_idx = ecg_step_report.get('ecg_excluded_components', []) or []
+            ecg_idx = ecg_step_report.get('ecg_excluded_components', [])
             ecg_scores = ecg_step_report.get('ecg_scores', None)
 
             if len(eog_idx) > 0:
@@ -1763,12 +1763,12 @@ class EEGPreprocessingPipeline:
         all_results : dict
             Dictionary mapping subject -> list of results for each matching file.
         """
-        
+
         subjects = self._get_entity_values('subject', subjects)
         sessions = self._get_entity_values('session', sessions)
         tasks = self._get_entity_values('task', tasks)
         acquisitions = self._get_entity_values('acquisition', acquisitions)
-        
+
         # print subjects, sessions, tasks, acquisitions
         logger.info(f"Subjects to process: {subjects}")
         logger.info(f"Sessions to process: {sessions}")
@@ -1779,7 +1779,7 @@ class EEGPreprocessingPipeline:
         logger.info(f"Computing {n_combinations} matching file(s) to process")
 
         all_results = {}
-        
+
         # Create progress bars for matched paths and preprocessing steps
         with Progress(
             SpinnerColumn(),
@@ -1788,7 +1788,7 @@ class EEGPreprocessingPipeline:
             TaskProgressColumn(),
             TimeRemainingColumn(),
         ) as progress:
-            
+
 
             # Overall progress for all recordings
             overall_task = progress.add_task(
