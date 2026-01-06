@@ -92,7 +92,6 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskPr
 import adaptive_reject
 from collections import defaultdict
 from utils import NpEncoder
-import numpy as np
 import matplotlib.pyplot as plt
 
 class EEGPreprocessingPipeline:

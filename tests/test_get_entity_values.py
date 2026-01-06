@@ -11,9 +11,7 @@ This test verifies that:
 
 import sys
 import tempfile
-import shutil
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 # Find the repository root
 repo_root = Path(__file__).parent.parent
