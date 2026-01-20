@@ -7,6 +7,7 @@ A modular, configuration-driven EEG preprocessing pipeline using MNE-BIDS. The p
 - **MNE-BIDS Integration**: Seamlessly reads EEG data in BIDS format
 - **Modular Design**: Each preprocessing step is a separate function
 - **Configuration-Driven**: Choose steps, their order, and parameters via YAML
+- **Custom Steps Support**: Extend the pipeline with your own preprocessing functions
 - **Progress Tracking**: Rich progress bars show real-time progress for recordings and preprocessing steps
 - **Comprehensive Logging**: MNE logger integration with optional log file output
 - **Multiple Output Formats**:
@@ -362,6 +363,96 @@ These arguments use the same matching logic as `mne-bids` `find_matching_paths`.
 - `--config`: Path to YAML configuration file (optional)
 - `--log-file`: Path to log file (optional, defaults to console output)
 - `--log-level`: Logging level - DEBUG, INFO, WARNING, or ERROR (optional, default: INFO)
+
+## Custom Preprocessing Steps
+
+The pipeline supports custom preprocessing steps, allowing you to extend the pipeline with your own processing functions without modifying the core code.
+
+### Creating Custom Steps
+
+1. **Create a Python file** with your custom step functions:
+
+```python
+# my_custom_steps.py
+def my_custom_filter(data, step_config):
+    """Apply custom filtering to raw data."""
+    if 'raw' not in data:
+        raise ValueError("my_custom_filter requires 'raw' in data")
+    
+    # Get parameters from step_config
+    cutoff_freq = step_config.get('cutoff_freq', 30.0)
+    
+    # Apply custom processing
+    data['raw'].filter(h_freq=cutoff_freq, l_freq=None)
+    
+    # Record the step for reporting
+    data['preprocessing_steps'].append({
+        'step': 'my_custom_filter',
+        'cutoff_freq': cutoff_freq
+    })
+    
+    return data
+```
+
+2. **Place the file in a dedicated folder**, for example: `/path/to/my_custom_steps/`
+
+3. **Update your config file** to specify the custom steps folder:
+
+```yaml
+custom_steps_folder: /path/to/my_custom_steps
+
+pipeline:
+  - name: my_custom_filter
+    cutoff_freq: 30.0
+  - name: bandpass_filter  # Built-in steps still work
+    l_freq: 0.5
+    h_freq: 40.0
+```
+
+4. **Run the pipeline** as usual - custom steps are automatically loaded and available.
+
+### Custom Step Requirements
+
+Custom step functions must follow these rules:
+
+- **Signature**: Accept exactly 2 parameters: `data` (Dict) and `step_config` (Dict)
+- **Return**: Return the updated `data` dictionary
+- **Validation**: Check that required data instances exist (e.g., `'raw'`, `'epochs'`)
+- **Recording**: Append a summary to `data['preprocessing_steps']` for reporting
+- **Naming**: Function names become step names; avoid starting with underscore
+
+See `configs/example_custom_steps.py` for complete examples.
+
+### Using Custom Steps with Docker
+
+Mount your custom steps folder when running the container:
+
+```bash
+docker run -v /host/bids:/data \
+           -v /host/custom_steps:/custom_steps \
+           -v /host/config:/config \
+           nice-preprocessing \
+           --bids-root /data \
+           --subjects 01 02 \
+           --tasks rest \
+           --config /config/my_config.yaml
+```
+
+In your config file, use the container path:
+
+```yaml
+custom_steps_folder: /custom_steps
+pipeline:
+  - name: my_custom_filter
+    cutoff_freq: 30.0
+```
+
+### Advanced Features
+
+- **Override built-in steps**: Custom steps with the same name as built-in steps will override them
+- **Multiple files**: Place multiple `.py` files in the custom steps folder - all will be loaded
+- **Error handling**: If a custom step file has errors, other files will still be loaded
+- **Private functions**: Functions starting with `_` are ignored and not loaded as steps
 
 ## Preprocessing Steps Details
 
