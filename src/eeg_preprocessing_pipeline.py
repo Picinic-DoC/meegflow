@@ -82,7 +82,7 @@ See README.md for detailed documentation and examples.
 """
 from itertools import product
 from pathlib import Path
-from typing import Union, Dict, Any, List
+from typing import Union, Dict, Any, List, Callable
 import json
 import mne
 from mne.utils import logger
@@ -93,6 +93,9 @@ import adaptive_reject
 from collections import defaultdict
 from utils import NpEncoder
 import matplotlib.pyplot as plt
+import importlib.util
+import sys
+import inspect
 
 class EEGPreprocessingPipeline:
     def __init__(self, bids_root: Union[str, Path], output_root: Union[str, Path] = None, config: Dict[str, Any] = None):
@@ -126,11 +129,129 @@ class EEGPreprocessingPipeline:
             'generate_html_report': self._step_generate_html_report,
         }
 
+        # Load custom steps if folder is specified in config
+        custom_steps_folder = self.config.get('custom_steps_folder')
+        if custom_steps_folder:
+            custom_steps = self._load_custom_steps(custom_steps_folder)
+            self.step_functions.update(custom_steps)
+            logger.info(f"Loaded {len(custom_steps)} custom step(s): {list(custom_steps.keys())}")
+
         # Validate pipeline steps if provided in config
         pipeline_cfg = self.config.get('pipeline', [])
         unknown = [s.get('name') for s in pipeline_cfg if s.get('name') not in self.step_functions]
         if unknown:
             raise ValueError(f"Unknown pipeline steps in config: {unknown}")
+
+    def _load_custom_steps(self, custom_steps_folder: Union[str, Path]) -> Dict[str, Callable]:
+        """
+        Load custom preprocessing steps from Python files in the specified folder.
+        
+        This method discovers .py files in the custom_steps_folder and imports functions
+        that follow the step function signature: func(data: Dict, step_config: Dict) -> Dict
+        
+        The function name will be used as the step name in the pipeline configuration.
+        Custom steps can override built-in steps by using the same name.
+        
+        Parameters
+        ----------
+        custom_steps_folder : str or Path
+            Path to folder containing Python files with custom step functions.
+            
+        Returns
+        -------
+        custom_steps : dict
+            Dictionary mapping step names to their functions.
+            
+        Notes
+        -----
+        Custom step functions must:
+        - Accept two parameters: data (Dict) and step_config (Dict)
+        - Return a Dict (the updated data dictionary)
+        - Be defined at module level (not inside classes)
+        
+        Example custom step file (my_steps.py):
+        ```python
+        def my_custom_filter(data, step_config):
+            '''Apply custom filtering to raw data.'''
+            if 'raw' not in data:
+                raise ValueError("my_custom_filter requires 'raw' in data")
+            
+            # Get parameters from step_config
+            cutoff_freq = step_config.get('cutoff_freq', 30.0)
+            
+            # Apply custom processing
+            data['raw'].filter(h_freq=cutoff_freq, l_freq=None)
+            
+            # Record the step
+            data['preprocessing_steps'].append({
+                'step': 'my_custom_filter',
+                'cutoff_freq': cutoff_freq
+            })
+            
+            return data
+        ```
+        """
+        custom_steps_folder = Path(custom_steps_folder)
+        
+        if not custom_steps_folder.exists():
+            raise ValueError(f"Custom steps folder does not exist: {custom_steps_folder}")
+        
+        if not custom_steps_folder.is_dir():
+            raise ValueError(f"Custom steps folder is not a directory: {custom_steps_folder}")
+        
+        custom_steps = {}
+        python_files = list(custom_steps_folder.glob("*.py"))
+        
+        logger.info(f"Searching for custom steps in: {custom_steps_folder}")
+        logger.info(f"Found {len(python_files)} Python file(s)")
+        
+        for py_file in python_files:
+            # Skip __init__.py and files starting with underscore
+            if py_file.name.startswith('_'):
+                logger.debug(f"Skipping {py_file.name}")
+                continue
+                
+            try:
+                # Create a unique module name to avoid conflicts
+                module_name = f"custom_steps.{py_file.stem}"
+                
+                # Load the module
+                spec = importlib.util.spec_from_file_location(module_name, py_file)
+                if spec is None or spec.loader is None:
+                    logger.warning(f"Could not load module spec for {py_file}")
+                    continue
+                    
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+                spec.loader.exec_module(module)
+                
+                # Find all functions in the module that match the step signature
+                for name, obj in inspect.getmembers(module, inspect.isfunction):
+                    # Skip private functions
+                    if name.startswith('_'):
+                        continue
+                    
+                    # Check function signature
+                    sig = inspect.signature(obj)
+                    params = list(sig.parameters.keys())
+                    
+                    # Step functions should accept exactly 2 parameters: data and step_config
+                    if len(params) == 2:
+                        custom_steps[name] = obj
+                        logger.info(f"Loaded custom step '{name}' from {py_file.name}")
+                    else:
+                        logger.debug(f"Skipping function '{name}' in {py_file.name} - "
+                                   f"expected 2 parameters, found {len(params)}")
+                        
+            except Exception as e:
+                logger.error(f"Error loading custom steps from {py_file}: {e}")
+                # Continue loading other files even if one fails
+                continue
+        
+        if not custom_steps:
+            logger.warning(f"No valid custom steps found in {custom_steps_folder}")
+        
+        return custom_steps
 
     def _build_include_patterns(
         self,
