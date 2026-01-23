@@ -218,22 +218,41 @@ The pipeline is configuration-driven. You define a list of preprocessing steps, 
 
 ### Available Steps
 
+Data Organization:
+- **strip_recording**: Crop recordings to remove data outside the first and last events
+- **concatenate_recordings**: Concatenate multiple raw recordings into a single continuous recording
+- **copy_instance**: Create a copy of a data instance for comparison or backup purposes
+
+Setup:
 - **set_montage**: Set channel montage for EEG data
 - **drop_unused_channels**: Explicitly drop specified channels by name
+
+Filtering:
 - **bandpass_filter**: Apply bandpass filtering
 - **notch_filter**: Apply notch filtering
+
+Preprocessing:
 - **resample**: Resample data to different sampling frequency
 - **reference**: Apply re-referencing
-- **find_flat_channels**: Find flat/disconnected channels based on variance
-- **interpolate_bad_channels**: Interpolate bad channels
-- **drop_bad_channels**: Drop bad channels without interpolation
 - **ica**: ICA-based artifact removal
-- **find_events**: Find events in the data
-- **epoch**: Create epochs around events
+
+Bad Channel Detection:
+- **find_flat_channels**: Find flat/disconnected channels based on variance
 - **find_bads_channels_threshold**: Find bad channels using threshold-based rejection
 - **find_bads_channels_variance**: Find bad channels using variance-based detection
 - **find_bads_channels_high_frequency**: Find bad channels using high-frequency variance
+
+Bad Channel Handling:
+- **interpolate_bad_channels**: Interpolate bad channels
+- **drop_bad_channels**: Drop bad channels without interpolation
+
+Epoching:
+- **find_events**: Find events in the data
+- **epoch**: Create epochs around events
+- **chunk_in_epoch**: Create fixed-length epochs from continuous data
 - **find_bads_epochs_threshold**: Find and remove bad epochs using threshold-based rejection
+
+Output:
 - **save_clean_instance**: Save raw or epochs data to .fif file
 - **generate_json_report**: Generate JSON report
 - **generate_html_report**: Generate HTML report
@@ -249,13 +268,7 @@ pipeline:
     h_freq: 40.0
   - name: reference
     ref_channels: average
-    instance: raw
-  - name: ica
-    n_components: 20
-    method: fastica
-    find_eog: true
-    find_ecg: false
-    apply: true
+    instance: 'raw'
   - name: find_events
     shortest_event: 1
   - name: epoch
@@ -292,52 +305,104 @@ See `configs/config_with_adaptive_reject.yaml` for a pipeline with adaptive auto
 
 ```yaml
 pipeline:
+  - name: concatenate_recordings
+  
   - name: set_montage
     montage: standard_1020
+  
   - name: bandpass_filter
-    l_freq: 0.5
-    h_freq: 45.0
+    l_freq: 0.1
+    h_freq: 40.0
+  
   - name: notch_filter
     freqs: [50.0, 100.0]
+  
   - name: resample
     instance: raw
     sfreq: 250.0
-    npad: 'auto'
+    npad: auto
+  
   - name: find_events
+    get_events_from: annotations
     shortest_event: 1
+    event_id:
+      stim/12hz: 10001
+      stim/15hz: 10002
+  
   - name: epoch
     tmin: -0.2
-    tmax: 0.8
+    tmax: 1.2
     baseline: [null, 0.0]
-    event_id: null
     reject: null
-  - name: find_bads_channels_threshold
-    reject:
-      eeg: 1.0e-4
-    n_epochs_bad_ch: 0.5
-  - name: find_bads_channels_variance
-    instance: epochs
-    zscore_thresh: 4
-    max_iter: 2
-  - name: find_bads_channels_high_frequency
-    instance: epochs
-    zscore_thresh: 4
-    max_iter: 2
-  - name: find_bads_epochs_threshold
-    reject:
-      eeg: 1.0e-4
-    n_channels_bad_epoch: 0.1
+  
   - name: reference
-    instance: epochs
+    instance: 'epochs'
     ref_channels: average
-  - name: interpolate_bad_channels
-    instance: epochs
+  
+  - name: reference
+    instance: 'raw'
+    ref_channels: average
+  
+  - name: generate_html_report
+```
+
+Note: This config file also includes commented-out examples of bad channel detection steps (find_bads_channels_threshold, find_bads_channels_variance, find_bads_channels_high_frequency) that can be uncommented and customized as needed.
+
+See `configs/config_minimal.yaml` for a comprehensive pipeline including strip_recording, copy_instance, and ICA:
+
+```yaml
+pipeline:
+  - name: strip_recording
+    instance: all_raw
+    get_events_from: annotations
+    shortest_event: 5
+    start_padding: 1
+    end_padding: 1
+  
+  - name: concatenate_recordings
+  
+  - name: set_montage
+    montage: GSN-HydroCel-256
+  
+  - name: copy_instance
+    from_instance: raw
+    to_instance: raw_before_cleaning
+  
+  - name: find_flat_channels
+    threshold: 1.0e-12
+  
+  - name: bandpass_filter
+    l_freq: 0.1
+    h_freq: 40.0
+  
+  - name: chunk_in_epoch
+    duration: 1
+  
+  - name: ica
+    n_components: 20
+    method: fastica
+    find_eog: true
+    apply: true
+  
   - name: save_clean_instance
     instance: epochs
     overwrite: true
-  - name: generate_json_report
+  
   - name: generate_html_report
+    compare_instances:
+      - title: 'Before vs After Cleaning'
+        instance_a:
+          name: 'raw'
+          label: 'After Cleaning'
+        instance_b:
+          name: 'raw_before_cleaning'
+          label: 'Before Cleaning'
 ```
+
+Additional example configurations available in `configs/`:
+- `config_with_drop_bad_channels.yaml` - Example using drop_bad_channels instead of interpolation
+- `config_with_excluded_channels.yaml` - Example using excluded_channels parameter to preserve reference channels
+- `config_with_custom_steps.yaml` - Example showing how to integrate custom preprocessing steps
 
 ## Command-Line Arguments
 
@@ -352,11 +417,7 @@ These arguments use the same matching logic as `mne-bids` `find_matching_paths`.
 - `--tasks`: Task name(s) to process, space-separated (e.g., `--tasks rest task1`)
 - `--acquisitions`: Acquisition parameter(s) to process
 - `--runs`: Run number(s) to process
-- `--processings`: Processing label(s) to process
-- `--recordings`: Recording name(s) to process
-- `--spaces`: Coordinate space(s) to process
-- `--splits`: Split(s) of continuous recording to process
-- `--descriptions`: Description(s) to process
+- `--extension`: File extension to process (default: `.vhdr`)
 
 ### Other Arguments
 - `--output-root`: Custom output path (optional, defaults to `bids-root/derivatives/nice-preprocessing`)
@@ -499,6 +560,55 @@ Many preprocessing steps support an `excluded_channels` parameter that allows yo
 
 See `configs/config_with_excluded_channels.yaml` for a complete example.
 
+### Data Organization Steps
+
+#### strip_recording
+Crop recordings to remove data outside the first and last events. This is useful for removing unnecessary data at the beginning and end of recordings that don't contain task-relevant data.
+- `instance`: Which data instance to crop - 'all_raw' or 'raw' (default: 'raw')
+- `get_events_from`: How to extract events - 'stim' or 'annotations' (default: 'annotations')
+- `shortest_event`: Minimum number of samples for an event (default: 1)
+- `event_id`: Event IDs to use for finding start/end points. Can be a dict mapping event names to IDs or 'auto' (default: 'auto')
+- `start_padding`: Time in seconds to keep before the first event (default: 1)
+- `end_padding`: Time in seconds to keep after the last event (default: 1)
+
+**Example:**
+```yaml
+- name: strip_recording
+  instance: all_raw
+  get_events_from: annotations
+  shortest_event: 1
+  event_id:
+    Stimulus/CatNewRepeated/CR: 91
+    Stimulus/CatOld/Hit: 101
+  start_padding: 1.0
+  end_padding: 1.0
+```
+
+#### concatenate_recordings
+Concatenate multiple raw recordings into a single continuous recording. This is useful when data is split across multiple files but needs to be processed as a single session.
+- No parameters required
+- Requires 'all_raw' to be present in data
+- Creates a single 'raw' instance from all recordings in 'all_raw'
+
+**Example:**
+```yaml
+- name: concatenate_recordings
+```
+
+#### copy_instance
+Create a copy of a data instance. This is useful for comparing data at different stages of preprocessing (e.g., before/after cleaning or ICA).
+- `from_instance`: Name of the instance to copy from (default: 'raw')
+- `to_instance`: Name of the new instance to create (default: 'raw_cleaned')
+
+**Example:**
+```yaml
+- name: copy_instance
+  from_instance: raw
+  to_instance: raw_before_ica
+```
+
+### Preprocessing Steps
+
 ### 1. set_montage
 Set channel montage for EEG data. Useful when data lacks electrode position information.
 - `montage`: Name of standard montage to use (default: 'standard_1020')
@@ -563,14 +673,30 @@ ICA-based artifact removal.
 - `n_components`: Number of ICA components (default: 20)
 - `method`: ICA method ('fastica', 'infomax', 'picard', default: 'fastica')
 - `random_state`: Random state for reproducibility (default: 97)
+- `picks`: Channel types to include in ICA (optional, default: EEG channels)
 - `excluded_channels`: List of channel names to exclude from ICA decomposition (optional)
-- `find_eog`: Automatically find EOG artifacts (true/false, default: true)
+- `ica_fit_l_freq`: High-pass frequency for filtering data before ICA fit (default: 1.0 Hz)
+- `ica_fit_h_freq`: Low-pass frequency for filtering data before ICA fit (optional, default: None)
+- `find_eog`: Automatically find EOG artifacts (true/false, default: false)
+  - `eog_channels`: List of channel names to use for EOG detection (optional, auto-detects if not provided)
+  - `eog_threshold`: Correlation threshold for EOG component detection (default: 'auto')
+  - `eog_measure`: Measure for EOG detection ('correlation' or 'ctps', default: 'correlation')
+  - `eog_l_freq`: High-pass frequency for EOG correlation (default: 1.0 Hz)
+  - `eog_h_freq`: Low-pass frequency for EOG correlation (default: 10.0 Hz)
 - `find_ecg`: Automatically find ECG artifacts (true/false, default: false)
+  - `ecg_channels`: List of channel names to use for ECG detection (optional)
+  - `ecg_threshold`: Correlation threshold for ECG component detection (default: 'auto')
+  - `ecg_measure`: Measure for ECG detection ('correlation' or 'ctps', default: 'correlation')
+  - `ecg_l_freq`: High-pass frequency for ECG correlation (default: 1.0 Hz)
+  - `ecg_h_freq`: Low-pass frequency for ECG correlation (default: 10.0 Hz)
+- `selected_indices`: Manually specify component indices to exclude (optional, list of integers)
 - `apply`: Apply ICA to remove artifacts (true/false, default: true)
 
 ### 11. find_events
 Find events in the data.
+- `get_events_from`: How to extract events - 'stim' or 'annotations' (default: 'annotations')
 - `shortest_event`: Minimum event duration in samples (default: 1)
+- `event_id`: Event IDs to extract. Can be 'auto' for all events or a dict mapping event names to IDs (default: 'auto')
 
 ### 12. epoch
 Create epochs around events.
@@ -580,7 +706,17 @@ Create epochs around events.
 - `event_id`: Event IDs to include (dict or null for all)
 - `reject`: Rejection criteria (dict with channel type keys, optional)
 
-### 13. find_bads_channels_threshold
+### 13. chunk_in_epoch
+Create fixed-length epochs from continuous raw data. This is an alternative to event-based epoching that splits the data into equal-duration segments.
+- `duration`: Duration of each epoch in seconds (default: 1.0)
+
+**Example:**
+```yaml
+- name: chunk_in_epoch
+  duration: 1.0  # Create 1-second epochs
+```
+
+### 14. find_bads_channels_threshold
 Find bad channels using threshold-based rejection. Marks channels as bad if they exceed rejection thresholds in too many epochs.
 - `picks`: Channel indices to check (optional, default: EEG channels)
 - `excluded_channels`: List of channel names to exclude from bad channel detection (optional)
@@ -588,7 +724,7 @@ Find bad channels using threshold-based rejection. Marks channels as bad if they
 - `n_epochs_bad_ch`: Fraction or number of epochs a channel must be bad in to be marked as bad (default: 0.5)
 - `apply_on`: List of instances to mark bad channels on (default: ['epochs'])
 
-### 14. find_bads_channels_variance
+### 15. find_bads_channels_variance
 Find bad channels using variance-based detection. Identifies channels with abnormally high or low variance.
 - `instance`: Which data instance to use - 'raw' or 'epochs' (default: 'epochs')
 - `picks`: Channel indices to check (optional, default: EEG channels)
@@ -622,7 +758,15 @@ Save clean raw or epochs data to .fif file in BIDS-derivatives format.
 Generate JSON report with preprocessing information. No parameters needed.
 
 ### 19. generate_html_report
-Generate HTML report with interactive visualizations. No parameters needed.
+Generate HTML report with interactive visualizations.
+- `picks`: Channel types to include in plots (optional, default: EEG channels)
+- `excluded_channels`: List of channel names to exclude from plots (optional)
+- `compare_instances`: List of instance comparisons to plot (optional, see config_minimal.yaml for example)
+- `plot_raw_kwargs`: Additional keyword arguments for raw data plots (optional, dict)
+- `plot_ica_kwargs`: Additional keyword arguments for ICA plots (optional, dict)
+- `plot_events_kwargs`: Additional keyword arguments for event plots (optional, dict)
+- `plot_epochs_kwargs`: Additional keyword arguments for epoch plots (optional, dict)
+- `plot_evokeds_kwargs`: Additional keyword arguments for evoked response plots (optional, dict)
 
 ## Batch Processing
 
@@ -732,8 +876,11 @@ sudo chown -R $USER:$USER /path/to/bids/derivatives
 The Docker image includes several pre-configured pipeline examples in `/app/configs/`:
 - `/app/configs/config_example.yaml` - Standard pipeline with epochs
 - `/app/configs/config_raw_only.yaml` - Raw data processing without epoching
-- `/app/configs/config_with_adaptive_reject.yaml` - Advanced pipeline with adaptive artifact rejection
-- `/app/configs/config_minimal.yaml` - Minimal preprocessing steps
+- `/app/configs/config_with_adaptive_reject.yaml` - Advanced pipeline with concatenation and event-based epochs
+- `/app/configs/config_minimal.yaml` - Comprehensive pipeline with strip_recording, ICA, and instance comparison
+- `/app/configs/config_with_drop_bad_channels.yaml` - Pipeline using drop_bad_channels instead of interpolation
+- `/app/configs/config_with_excluded_channels.yaml` - Pipeline demonstrating excluded_channels parameter
+- `/app/configs/config_with_custom_steps.yaml` - Example template for using custom preprocessing steps
 
 Example using a built-in config:
 ```bash
