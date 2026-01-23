@@ -218,22 +218,41 @@ The pipeline is configuration-driven. You define a list of preprocessing steps, 
 
 ### Available Steps
 
+Data Organization:
+- **strip_recording**: Crop recordings to remove data outside the first and last events
+- **concatenate_recordings**: Concatenate multiple raw recordings into a single continuous recording
+- **copy_instance**: Create a copy of a data instance for comparison or backup purposes
+
+Setup:
 - **set_montage**: Set channel montage for EEG data
 - **drop_unused_channels**: Explicitly drop specified channels by name
+
+Filtering:
 - **bandpass_filter**: Apply bandpass filtering
 - **notch_filter**: Apply notch filtering
+
+Preprocessing:
 - **resample**: Resample data to different sampling frequency
 - **reference**: Apply re-referencing
-- **find_flat_channels**: Find flat/disconnected channels based on variance
-- **interpolate_bad_channels**: Interpolate bad channels
-- **drop_bad_channels**: Drop bad channels without interpolation
 - **ica**: ICA-based artifact removal
-- **find_events**: Find events in the data
-- **epoch**: Create epochs around events
+
+Bad Channel Detection:
+- **find_flat_channels**: Find flat/disconnected channels based on variance
 - **find_bads_channels_threshold**: Find bad channels using threshold-based rejection
 - **find_bads_channels_variance**: Find bad channels using variance-based detection
 - **find_bads_channels_high_frequency**: Find bad channels using high-frequency variance
+
+Bad Channel Handling:
+- **interpolate_bad_channels**: Interpolate bad channels
+- **drop_bad_channels**: Drop bad channels without interpolation
+
+Epoching:
+- **find_events**: Find events in the data
+- **epoch**: Create epochs around events
+- **chunk_in_epoch**: Create fixed-length epochs from continuous data
 - **find_bads_epochs_threshold**: Find and remove bad epochs using threshold-based rejection
+
+Output:
 - **save_clean_instance**: Save raw or epochs data to .fif file
 - **generate_json_report**: Generate JSON report
 - **generate_html_report**: Generate HTML report
@@ -499,6 +518,55 @@ Many preprocessing steps support an `excluded_channels` parameter that allows yo
 
 See `configs/config_with_excluded_channels.yaml` for a complete example.
 
+### Data Organization Steps
+
+#### strip_recording
+Crop recordings to remove data outside the first and last events. This is useful for removing unnecessary data at the beginning and end of recordings that don't contain task-relevant data.
+- `instance`: Which data instance to crop - 'all_raw' or 'raw' (default: 'raw')
+- `get_events_from`: How to extract events - 'stim' or 'annotations' (default: 'annotations')
+- `shortest_event`: Minimum number of samples for an event (default: 1)
+- `event_id`: Event IDs to use for finding start/end points. Can be a dict mapping event names to IDs or 'auto' (default: 'auto')
+- `start_padding`: Time in seconds to keep before the first event (default: 1)
+- `end_padding`: Time in seconds to keep after the last event (default: 1)
+
+**Example:**
+```yaml
+- name: strip_recording
+  instance: all_raw
+  get_events_from: annotations
+  shortest_event: 1
+  event_id:
+    Stimulus/CatNewRepeated/CR: 91
+    Stimulus/CatOld/Hit: 101
+  start_padding: 1.0
+  end_padding: 1.0
+```
+
+#### concatenate_recordings
+Concatenate multiple raw recordings into a single continuous recording. This is useful when data is split across multiple files but needs to be processed as a single session.
+- No parameters required
+- Requires 'all_raw' to be present in data
+- Creates a single 'raw' instance from all recordings in 'all_raw'
+
+**Example:**
+```yaml
+- name: concatenate_recordings
+```
+
+#### copy_instance
+Create a copy of a data instance. This is useful for comparing data at different stages of preprocessing (e.g., before/after cleaning or ICA).
+- `from_instance`: Name of the instance to copy from (default: 'raw')
+- `to_instance`: Name of the new instance to create (default: 'raw_cleaned')
+
+**Example:**
+```yaml
+- name: copy_instance
+  from_instance: raw
+  to_instance: raw_before_ica
+```
+
+### Preprocessing Steps
+
 ### 1. set_montage
 Set channel montage for EEG data. Useful when data lacks electrode position information.
 - `montage`: Name of standard montage to use (default: 'standard_1020')
@@ -580,7 +648,17 @@ Create epochs around events.
 - `event_id`: Event IDs to include (dict or null for all)
 - `reject`: Rejection criteria (dict with channel type keys, optional)
 
-### 13. find_bads_channels_threshold
+### 13. chunk_in_epoch
+Create fixed-length epochs from continuous raw data. This is an alternative to event-based epoching that splits the data into equal-duration segments.
+- `duration`: Duration of each epoch in seconds (default: 1.0)
+
+**Example:**
+```yaml
+- name: chunk_in_epoch
+  duration: 1.0  # Create 1-second epochs
+```
+
+### 14. find_bads_channels_threshold
 Find bad channels using threshold-based rejection. Marks channels as bad if they exceed rejection thresholds in too many epochs.
 - `picks`: Channel indices to check (optional, default: EEG channels)
 - `excluded_channels`: List of channel names to exclude from bad channel detection (optional)
@@ -588,7 +666,7 @@ Find bad channels using threshold-based rejection. Marks channels as bad if they
 - `n_epochs_bad_ch`: Fraction or number of epochs a channel must be bad in to be marked as bad (default: 0.5)
 - `apply_on`: List of instances to mark bad channels on (default: ['epochs'])
 
-### 14. find_bads_channels_variance
+### 15. find_bads_channels_variance
 Find bad channels using variance-based detection. Identifies channels with abnormally high or low variance.
 - `instance`: Which data instance to use - 'raw' or 'epochs' (default: 'epochs')
 - `picks`: Channel indices to check (optional, default: EEG channels)
