@@ -268,13 +268,7 @@ pipeline:
     h_freq: 40.0
   - name: reference
     ref_channels: average
-    instance: raw
-  - name: ica
-    n_components: 20
-    method: fastica
-    find_eog: true
-    find_ecg: false
-    apply: true
+    instance: 'raw'
   - name: find_events
     shortest_event: 1
   - name: epoch
@@ -311,52 +305,104 @@ See `configs/config_with_adaptive_reject.yaml` for a pipeline with adaptive auto
 
 ```yaml
 pipeline:
+  - name: concatenate_recordings
+  
   - name: set_montage
     montage: standard_1020
+  
   - name: bandpass_filter
-    l_freq: 0.5
-    h_freq: 45.0
+    l_freq: 0.1
+    h_freq: 40.0
+  
   - name: notch_filter
     freqs: [50.0, 100.0]
+  
   - name: resample
     instance: raw
     sfreq: 250.0
-    npad: 'auto'
+    npad: auto
+  
   - name: find_events
+    get_events_from: annotations
     shortest_event: 1
+    event_id:
+      stim/12hz: 10001
+      stim/15hz: 10002
+  
   - name: epoch
     tmin: -0.2
-    tmax: 0.8
+    tmax: 1.2
     baseline: [null, 0.0]
-    event_id: null
     reject: null
-  - name: find_bads_channels_threshold
-    reject:
-      eeg: 1.0e-4
-    n_epochs_bad_ch: 0.5
-  - name: find_bads_channels_variance
-    instance: epochs
-    zscore_thresh: 4
-    max_iter: 2
-  - name: find_bads_channels_high_frequency
-    instance: epochs
-    zscore_thresh: 4
-    max_iter: 2
-  - name: find_bads_epochs_threshold
-    reject:
-      eeg: 1.0e-4
-    n_channels_bad_epoch: 0.1
+  
   - name: reference
-    instance: epochs
+    instance: 'epochs'
     ref_channels: average
-  - name: interpolate_bad_channels
-    instance: epochs
+  
+  - name: reference
+    instance: 'raw'
+    ref_channels: average
+  
+  - name: generate_html_report
+```
+
+Note: This config file also includes commented-out examples of bad channel detection steps (find_bads_channels_threshold, find_bads_channels_variance, find_bads_channels_high_frequency) that can be uncommented and customized as needed.
+
+See `configs/config_minimal.yaml` for a comprehensive pipeline including strip_recording, copy_instance, and ICA:
+
+```yaml
+pipeline:
+  - name: strip_recording
+    instance: all_raw
+    get_events_from: annotations
+    shortest_event: 5
+    start_padding: 1
+    end_padding: 1
+  
+  - name: concatenate_recordings
+  
+  - name: set_montage
+    montage: GSN-HydroCel-256
+  
+  - name: copy_instance
+    from_instance: raw
+    to_instance: raw_before_cleaning
+  
+  - name: find_flat_channels
+    threshold: 1.0e-12
+  
+  - name: bandpass_filter
+    l_freq: 0.1
+    h_freq: 40.0
+  
+  - name: chunk_in_epoch
+    duration: 1
+  
+  - name: ica
+    n_components: 20
+    method: fastica
+    find_eog: true
+    apply: true
+  
   - name: save_clean_instance
     instance: epochs
     overwrite: true
-  - name: generate_json_report
+  
   - name: generate_html_report
+    compare_instances:
+      - title: 'Before vs After Cleaning'
+        instance_a:
+          name: 'raw'
+          label: 'After Cleaning'
+        instance_b:
+          name: 'raw_before_cleaning'
+          label: 'Before Cleaning'
 ```
+
+Additional example configurations available in `configs/`:
+- `config_with_drop_bad_channels.yaml` - Example using drop_bad_channels instead of interpolation
+- `config_with_excluded_channels.yaml` - Example using excluded_channels parameter to preserve reference channels
+- `config_with_custom_steps.yaml` - Example showing how to integrate custom preprocessing steps
 
 ## Command-Line Arguments
 
@@ -810,8 +856,11 @@ sudo chown -R $USER:$USER /path/to/bids/derivatives
 The Docker image includes several pre-configured pipeline examples in `/app/configs/`:
 - `/app/configs/config_example.yaml` - Standard pipeline with epochs
 - `/app/configs/config_raw_only.yaml` - Raw data processing without epoching
-- `/app/configs/config_with_adaptive_reject.yaml` - Advanced pipeline with adaptive artifact rejection
-- `/app/configs/config_minimal.yaml` - Minimal preprocessing steps
+- `/app/configs/config_with_adaptive_reject.yaml` - Advanced pipeline with concatenation and event-based epochs
+- `/app/configs/config_minimal.yaml` - Comprehensive pipeline with strip_recording, ICA, and instance comparison
+- `/app/configs/config_with_drop_bad_channels.yaml` - Pipeline using drop_bad_channels instead of interpolation
+- `/app/configs/config_with_excluded_channels.yaml` - Pipeline demonstrating excluded_channels parameter
+- `/app/configs/config_with_custom_steps.yaml` - Example template for using custom preprocessing steps
 
 Example using a built-in config:
 ```bash
