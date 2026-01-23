@@ -466,7 +466,7 @@ class ReportGenerator:
                 raise ValueError(f"compare_instances step: channel mismatch between '{inst_a}' and '{inst_b}' after picking")
 
             raw_b = inst_b.copy().pick(picks=ch_names_picks).reorder_channels(ch_names_a)
-            raw_a = inst_a.copy().pick(picks=ch_names_picks).reorder_channels(ch_names_b)
+            raw_a = inst_a.copy().pick(picks=ch_names_picks).reorder_channels(ch_names_a)
 
             Xb = raw_b.get_data()
             Xa = raw_a.get_data()
@@ -491,7 +491,7 @@ class ReportGenerator:
             axes[1].plot(times, mean_b, color='red', alpha=0.35, label=inst_b_label)
             axes[1].plot(times, mean_a, color='black', linewidth=1.0, label=inst_a_label)
             axes[1].set_title('Mean EEG across channels (full recording)')
-            axes[0].legend(loc='upper right')
+            axes[1].legend(loc='upper right')
 
             axes[2].plot(times, diff_abs, color='purple', linewidth=1.0)
             axes[2].set_title(f'Mean absolute difference |{inst_a_label} - {inst_b_label}| (full recording)')

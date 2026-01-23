@@ -506,7 +506,7 @@ class PreprocessingPipeline:
     
     def _step_concatenate_recordings(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         if 'all_raw' not in data:
-            raise ValueError("notch_filter requires 'all_raw' in data")
+            raise ValueError("concatenate_recordings requires 'all_raw' in data")
 
         if len(data['all_raw']) > 1:
             data['raw'] = mne.concatenate_raws(data['all_raw'])
@@ -1374,15 +1374,13 @@ class PreprocessingPipeline:
             apply_on = [apply_on]
 
         if any(inst not in data for inst in apply_on):
-            raise ValueError(f"find_bads_channels_threshold requires all instances of apply_on ({apply_on}) to be present in data")
+            raise ValueError(f"find_bads_channels_variance requires all instances of apply_on ({apply_on}) to be present in data")
 
         picks = self._get_picks(data[instance].info, picks_params, excluded_channels)
 
         bad_chs = adaptive_reject.find_bads_channels_variance(
             data[instance], picks, zscore_thresh, max_iter
         )
-
-        bad_chs = [data[instance].ch_names[ch_idx] for ch_idx in [1,5,8]]
 
         # Mark channels as bad
         if bad_chs:
