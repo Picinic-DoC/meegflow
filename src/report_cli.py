@@ -233,8 +233,15 @@ def report_main():
                 'status': 'error',
                 'error': f'FileNotFoundError: {str(e)}'
             })
-        except (IOError, OSError, pickle.UnpicklingError) as e:
-            logger.error(f"I/O or unpickling error for {intermediate_path}: {e}")
+        except pickle.UnpicklingError as e:
+            logger.error(f"Error unpickling data for {intermediate_path}: {e}")
+            results.append({
+                'intermediate_path': str(intermediate_path),
+                'status': 'error',
+                'error': f'UnpicklingError: {str(e)}'
+            })
+        except (IOError, OSError) as e:
+            logger.error(f"File system error for {intermediate_path}: {e}")
             results.append({
                 'intermediate_path': str(intermediate_path),
                 'status': 'error',
