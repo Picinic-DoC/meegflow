@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # Preprocessing service - runs EEG preprocessing and saves intermediate results
+  preprocessing:
+    build:
+      context: .
+      dockerfile: Dockerfile.preprocessing
+    container_name: nice-preprocessing
+    volumes:
+      # Mount BIDS dataset directory
+      - ${BIDS_ROOT:-./data}:/data
+      # Mount config file directory
+      - ${CONFIG_DIR:-./configs}:/configs
+    environment:
+      # Set any environment variables if needed
+      - PYTHONUNBUFFERED=1
+    # Override entrypoint to allow custom commands
+    # Example: docker-compose run preprocessing --bids-root /data --config /configs/config.yaml
+    # Or set default command here
+    # command: ["--bids-root", "/data", "--config", "/configs/config_example.yaml"]
+
+  # Report service - generates reports from saved intermediate results
+  report:
+    build:
+      context: .
+      dockerfile: Dockerfile.report
+    container_name: nice-report-generator
+    volumes:
+      # Mount BIDS dataset directory (same as preprocessing)
+      - ${BIDS_ROOT:-./data}:/data
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Override entrypoint to allow custom commands
+    # Example: docker-compose run report --bids-root /data --all
+    # Or set default command here
+    # command: ["--bids-root", "/data", "--all"]
+
+  # Combined service - runs both preprocessing and report generation (original behavior)
+  # This uses the original Dockerfile for backward compatibility
+  combined:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nice-combined-pipeline
+    volumes:
+      - ${BIDS_ROOT:-./data}:/data
+      - ${CONFIG_DIR:-./configs}:/configs
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Example: docker-compose run combined --bids-root /data --config /configs/config_example.yaml
+
+networks:
+  default:
+    name: nice-preprocessing-network
