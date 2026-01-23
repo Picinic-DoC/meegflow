@@ -35,9 +35,7 @@ pipeline:
     instance: epochs
   
   # Save intermediate results for later report generation
-  # This is the key step that enables the split workflow
+  # This step saves all available data objects (raw, epochs, ICA, events)
+  # and metadata (preprocessing steps, parameters) to disk
   - name: save_intermediate_results
-    save_raw: true          # Save raw data object
-    save_epochs: true       # Save epochs object
-    save_ica: true          # Save ICA object (if ICA was performed)
-    save_events: true       # Save events array
+

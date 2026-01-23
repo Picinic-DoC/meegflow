@@ -48,6 +48,7 @@ See README.md for detailed examples and documentation.
 """
 import argparse
 import json
+import pickle
 from pathlib import Path
 from mne.utils import logger, set_log_file, set_log_level
 from report_generator import ReportGenerator
@@ -225,8 +226,25 @@ def report_main():
             logger.info(f"  JSON: {report_paths['json_report']}")
             logger.info(f"  HTML: {report_paths['html_report']}")
             
+        except FileNotFoundError as e:
+            logger.error(f"Intermediate results not found for {intermediate_path}: {e}")
+            results.append({
+                'intermediate_path': str(intermediate_path),
+                'status': 'error',
+                'error': f'FileNotFoundError: {str(e)}'
+            })
+        except (IOError, OSError, pickle.UnpicklingError) as e:
+            logger.error(f"I/O or unpickling error for {intermediate_path}: {e}")
+            results.append({
+                'intermediate_path': str(intermediate_path),
+                'status': 'error',
+                'error': f'{type(e).__name__}: {str(e)}'
+            })
         except Exception as e:
-            logger.error(f"Error generating reports for {intermediate_path}: {str(e)}")
+            # Re-raise critical errors
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            logger.error(f"Unexpected error generating reports for {intermediate_path}: {str(e)}")
             results.append({
                 'intermediate_path': str(intermediate_path),
                 'status': 'error',

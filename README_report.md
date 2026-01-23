@@ -309,6 +309,21 @@ docker-compose run --rm report \
 
 **Solution**: Generate reports for fewer subjects at a time, or increase available memory.
 
+## Security Considerations
+
+**Loading Intermediate Results**: The report module loads pickled data objects. Pickle files from untrusted sources could potentially execute arbitrary code when loaded. Always ensure that:
+
+1. You only load intermediate results from trusted preprocessing runs
+2. Intermediate results were created by you or your team
+3. You do not load intermediate results from unknown or untrusted sources
+4. Intermediate results directories have appropriate file permissions
+
+For production environments:
+- Verify the source of intermediate results before loading
+- Use separate BIDS roots for different security contexts
+- Implement file permission controls on intermediate results directories
+- Consider implementing checksums or digital signatures for verification
+
 ## Performance Tips
 
 1. **Generate reports in batches**: Process subjects one at a time for large datasets
