@@ -417,11 +417,7 @@ These arguments use the same matching logic as `mne-bids` `find_matching_paths`.
 - `--tasks`: Task name(s) to process, space-separated (e.g., `--tasks rest task1`)
 - `--acquisitions`: Acquisition parameter(s) to process
 - `--runs`: Run number(s) to process
-- `--processings`: Processing label(s) to process
-- `--recordings`: Recording name(s) to process
-- `--spaces`: Coordinate space(s) to process
-- `--splits`: Split(s) of continuous recording to process
-- `--descriptions`: Description(s) to process
+- `--extension`: File extension to process (default: `.vhdr`)
 
 ### Other Arguments
 - `--output-root`: Custom output path (optional, defaults to `bids-root/derivatives/nice-preprocessing`)
@@ -677,14 +673,30 @@ ICA-based artifact removal.
 - `n_components`: Number of ICA components (default: 20)
 - `method`: ICA method ('fastica', 'infomax', 'picard', default: 'fastica')
 - `random_state`: Random state for reproducibility (default: 97)
+- `picks`: Channel types to include in ICA (optional, default: EEG channels)
 - `excluded_channels`: List of channel names to exclude from ICA decomposition (optional)
-- `find_eog`: Automatically find EOG artifacts (true/false, default: true)
+- `ica_fit_l_freq`: High-pass frequency for filtering data before ICA fit (default: 1.0 Hz)
+- `ica_fit_h_freq`: Low-pass frequency for filtering data before ICA fit (optional, default: None)
+- `find_eog`: Automatically find EOG artifacts (true/false, default: false)
+  - `eog_channels`: List of channel names to use for EOG detection (optional, auto-detects if not provided)
+  - `eog_threshold`: Correlation threshold for EOG component detection (default: 'auto')
+  - `eog_measure`: Measure for EOG detection ('correlation' or 'ctps', default: 'correlation')
+  - `eog_l_freq`: High-pass frequency for EOG correlation (default: 1.0 Hz)
+  - `eog_h_freq`: Low-pass frequency for EOG correlation (default: 10.0 Hz)
 - `find_ecg`: Automatically find ECG artifacts (true/false, default: false)
+  - `ecg_channels`: List of channel names to use for ECG detection (optional)
+  - `ecg_threshold`: Correlation threshold for ECG component detection (default: 'auto')
+  - `ecg_measure`: Measure for ECG detection ('correlation' or 'ctps', default: 'correlation')
+  - `ecg_l_freq`: High-pass frequency for ECG correlation (default: 1.0 Hz)
+  - `ecg_h_freq`: Low-pass frequency for ECG correlation (default: 10.0 Hz)
+- `selected_indices`: Manually specify component indices to exclude (optional, list of integers)
 - `apply`: Apply ICA to remove artifacts (true/false, default: true)
 
 ### 11. find_events
 Find events in the data.
+- `get_events_from`: How to extract events - 'stim' or 'annotations' (default: 'annotations')
 - `shortest_event`: Minimum event duration in samples (default: 1)
+- `event_id`: Event IDs to extract. Can be 'auto' for all events or a dict mapping event names to IDs (default: 'auto')
 
 ### 12. epoch
 Create epochs around events.
@@ -746,7 +758,15 @@ Save clean raw or epochs data to .fif file in BIDS-derivatives format.
 Generate JSON report with preprocessing information. No parameters needed.
 
 ### 19. generate_html_report
-Generate HTML report with interactive visualizations. No parameters needed.
+Generate HTML report with interactive visualizations.
+- `picks`: Channel types to include in plots (optional, default: EEG channels)
+- `excluded_channels`: List of channel names to exclude from plots (optional)
+- `compare_instances`: List of instance comparisons to plot (optional, see config_minimal.yaml for example)
+- `plot_raw_kwargs`: Additional keyword arguments for raw data plots (optional, dict)
+- `plot_ica_kwargs`: Additional keyword arguments for ICA plots (optional, dict)
+- `plot_events_kwargs`: Additional keyword arguments for event plots (optional, dict)
+- `plot_epochs_kwargs`: Additional keyword arguments for epoch plots (optional, dict)
+- `plot_evokeds_kwargs`: Additional keyword arguments for evoked response plots (optional, dict)
 
 ## Batch Processing
 
