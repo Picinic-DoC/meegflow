@@ -98,9 +98,57 @@ import sys
 import inspect
 
 class EEGPreprocessingPipeline:
-    def __init__(self, bids_root: Union[str, Path], output_root: Union[str, Path] = None, config: Dict[str, Any] = None):
-        self.bids_root = Path(bids_root)
+    def __init__(
+        self, 
+        bids_root: Union[str, Path] = None, 
+        output_root: Union[str, Path] = None, 
+        config: Dict[str, Any] = None,
+        reader: 'DatasetReader' = None
+    ):
+        """Initialize EEG preprocessing pipeline.
+        
+        Parameters
+        ----------
+        bids_root : str or Path, optional
+            Path to BIDS root directory. Required if reader is not provided.
+        output_root : str or Path, optional
+            Path to output derivatives root. If not provided, defaults to
+            bids_root/derivatives/nice_preprocessing
+        config : dict, optional
+            Configuration dictionary containing pipeline steps and parameters
+        reader : DatasetReader, optional
+            Reader instance for discovering data files. If not provided,
+            a BIDSReader will be created using bids_root.
+            
+        Notes
+        -----
+        Either bids_root or reader must be provided. If both are provided,
+        the reader takes precedence.
+        """
         self.config = config or {}
+        
+        # Handle reader initialization
+        if reader is not None:
+            self.reader = reader
+            # If reader is provided but bids_root is not, try to get it from reader
+            if bids_root is None:
+                if hasattr(reader, 'bids_root'):
+                    self.bids_root = Path(reader.bids_root)
+                elif hasattr(reader, 'data_root'):
+                    self.bids_root = Path(reader.data_root)
+                else:
+                    raise ValueError("bids_root must be provided when using a custom reader without bids_root or data_root attribute")
+            else:
+                self.bids_root = Path(bids_root)
+        else:
+            # No reader provided, create a BIDS reader
+            if bids_root is None:
+                raise ValueError("Either bids_root or reader must be provided")
+            
+            self.bids_root = Path(bids_root)
+            # Import here to avoid circular imports
+            from readers import BIDSReader
+            self.reader = BIDSReader(self.bids_root)
 
         # Map step names to their corresponding methods
         self.step_functions = {
@@ -1889,28 +1937,59 @@ class EEGPreprocessingPipeline:
         data['html_report'] = str(bids_path)
         return data
 
-    def _process_single_recording(self, bids_path: list[BIDSPath], progress: Progress = None, task_id: int = None) -> Dict[str, Any]:
-        """Process a single subject using the configured pipeline steps."""
-        # Initialize data dictionary
+    def _process_single_recording(
+        self, 
+        paths: List[Union[BIDSPath, Path]], 
+        metadata: Dict[str, Any],
+        progress: Progress = None, 
+        task_id: int = None
+    ) -> Dict[str, Any]:
+        """Process a single recording using the configured pipeline steps.
+        
+        Parameters
+        ----------
+        paths : list of BIDSPath or Path
+            List of file paths to process together
+        metadata : dict
+            Metadata dictionary with keys like 'subject', 'task', 'session', 'acquisition'
+        progress : Progress, optional
+            Rich progress bar instance
+        task_id : int, optional
+            Progress task ID for updating progress
+            
+        Returns
+        -------
+        results : dict
+            Dictionary containing processing results
+        """
+        # Initialize data dictionary with metadata
         data = {
-            'subject': bids_path[0].subject,
-            'task': bids_path[0].task,
-            'session': bids_path[0].session,
-            'acquisition': bids_path[0].acquisition,
+            'subject': metadata.get('subject'),
+            'task': metadata.get('task'),
+            'session': metadata.get('session'),
+            'acquisition': metadata.get('acquisition'),
             'preprocessing_steps': []
         }
 
-        # Read BIDS data
-        logger.info(f"Reading BIDS data from:")
-        for bp in bids_path:
-            logger.info(f"  - {bp.fpath}")
+        # Read data files
+        logger.info(f"Reading data from:")
+        for path in paths:
+            logger.info(f"  - {path}")
 
-        # Read all BIDS raws and concatenate into a single Raw object
-        data['all_raw'] = [read_raw_bids(bids_path=bp, verbose=False) for bp in bids_path]
+        # Read all files and concatenate into a single Raw object
+        # Check if paths are BIDSPath objects or regular Path objects
+        if paths and isinstance(paths[0], BIDSPath):
+            # Use read_raw_bids for BIDS paths
+            data['all_raw'] = [read_raw_bids(bids_path=bp, verbose=False) for bp in paths]
+        else:
+            # Use mne.io.read_raw for regular paths
+            import mne.io
+            data['all_raw'] = [mne.io.read_raw(str(p), preload=True, verbose=False) for p in paths]
 
         # Ensure data are loaded into memory for processing
         for raw in data['all_raw']:
-            raw.load_data()
+            if not raw.preload:
+                raw.load_data()
 
         # Get pipeline steps from config
         pipeline_steps = self._get_pipeline_steps()
@@ -1941,7 +2020,7 @@ class EEGPreprocessingPipeline:
             'task': data.get('task'),
             'session': data.get('session'),
             'acquisition': data.get('acquisition'),
-            'raw_files': [str(bp.fpath) for bp in bids_path],
+            'raw_files': [str(p) for p in paths],
         }
 
         # Copy relevant output information to results
@@ -1960,7 +2039,7 @@ class EEGPreprocessingPipeline:
         acquisitions: Union[str, List[str]] = None,
         extension: str = '.vhdr'
     ) -> Dict[str, Any]:
-        """Run the pipeline using mne-bids to query files.
+        """Run the pipeline using the configured reader to find files.
 
         Parameters
         ----------
@@ -1972,33 +2051,25 @@ class EEGPreprocessingPipeline:
             Task(s) to process. None matches all tasks.
         acquisitions : str | list of str | None
             Acquisition parameter(s). None matches all acquisitions.
+        extension : str
+            File extension to match (default: .vhdr)
 
         Returns
         -------
         all_results : dict
             Dictionary mapping subject -> list of results for each matching file.
         """
-
-        # First, get subjects (no dependencies)
-        subjects = self._get_entity_values('subject', subjects)
         
-        # Then get sessions, passing subjects to narrow search
-        sessions = self._get_entity_values('session', sessions, subjects=subjects)
+        # Use the reader to find recordings
+        recordings = self.reader.find_recordings(
+            subjects=subjects,
+            sessions=sessions,
+            tasks=tasks,
+            acquisitions=acquisitions,
+            extension=extension
+        )
         
-        # Get tasks, passing both subjects and sessions to narrow search
-        tasks = self._get_entity_values('task', tasks, subjects=subjects, sessions=sessions)
-        
-        # Get acquisitions, passing both subjects and sessions to narrow search
-        acquisitions = self._get_entity_values('acquisition', acquisitions, subjects=subjects, sessions=sessions)
-
-        # print subjects, sessions, tasks, acquisitions
-        logger.info(f"Subjects to process: {subjects}")
-        logger.info(f"Sessions to process: {sessions}")
-        logger.info(f"Tasks to process: {tasks}")
-        logger.info(f"Acquisitions to process: {acquisitions}")
-
-        n_combinations = len(subjects) * len(sessions) * len(tasks) * len(acquisitions)
-        logger.info(f"Computing {n_combinations} matching file(s) to process")
+        logger.info(f"Found {len(recordings)} recording(s) to process")
 
         all_results = {}
 
@@ -2011,51 +2082,44 @@ class EEGPreprocessingPipeline:
             TimeRemainingColumn(),
         ) as progress:
 
-
             # Overall progress for all recordings
             overall_task = progress.add_task(
                 "[green]Processing recordings", 
-                total=n_combinations
+                total=len(recordings)
             )
 
-            for i, (subject, session, task, acquisition) in enumerate(product(subjects, sessions, tasks, acquisitions)):
-
-                pb = BIDSPath(
-                    root=self.bids_root,
-                    subject=subject,
-                    session=session,
-                    task=task,
-                    acquisition=acquisition,
-                    extension=extension,
-                    suffix='eeg',
-                    datatype='eeg',
-                )
-
-                all_raw_paths = list(pb.match(ignore_nosub=True))
-                if len(all_raw_paths) == 0:
-                    logger.warning(f"No files found for {subject} - {session} - {task} - {acquisition}, skipping.")
-                    continue
-
-                logger.info(f"Found {len(all_raw_paths)} recording(s) for {subject} - {session} - {task} - {acquisition} to process together.")
-
+            for i, recording in enumerate(recordings):
+                # Extract metadata and paths from the recording
+                paths = recording['paths']
+                metadata = recording['metadata']
+                recording_name = recording['recording_name']
+                
                 # Get pipeline steps for this recording's progress bar
                 pipeline_steps = self._get_pipeline_steps()
                 
                 # Create a task for the current recording's steps
-                recording_name = f"{subject} - {session} - {task} - {acquisition}"
                 step_task = progress.add_task(
                     f"[cyan]{recording_name}", 
                     total=len(pipeline_steps)
                 )
                 
                 try:
-                    results = self._process_single_recording(all_raw_paths, progress, step_task)
-                    all_results.setdefault(subject, []).append(results)
+                    results = self._process_single_recording(
+                        paths=paths,
+                        metadata=metadata,
+                        progress=progress, 
+                        step_task=step_task
+                    )
+                    
+                    # Use subject from metadata if available, otherwise use first available key
+                    subject_key = metadata.get('subject', list(metadata.values())[0] if metadata else 'unknown')
+                    all_results.setdefault(subject_key, []).append(results)
                     logger.info(f"Successfully completed {recording_name}")
                 except Exception as exc:
                     # Do not stop the whole batch if one subject fails; capture the error
                     logger.error(f"Error processing {recording_name}: {str(exc)}")
-                    all_results.setdefault(subject, []).append({'error': str(exc)})
+                    subject_key = metadata.get('subject', list(metadata.values())[0] if metadata else 'unknown')
+                    all_results.setdefault(subject_key, []).append({'error': str(exc)})
                     raise exc
                 finally:
                     # Remove the step task after this recording is done
