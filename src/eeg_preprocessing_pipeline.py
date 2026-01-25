@@ -105,47 +105,30 @@ if TYPE_CHECKING:
 class EEGPreprocessingPipeline:
     def __init__(
         self, 
-        bids_root: Union[str, Path] = None, 
+        reader: DatasetReader,
         output_root: Union[str, Path] = None, 
-        config: Dict[str, Any] = None,
-        reader: DatasetReader = None
+        config: Dict[str, Any] = None
     ):
         """Initialize EEG preprocessing pipeline.
         
         Parameters
         ----------
-        bids_root : str or Path, optional
-            Path to BIDS root directory. Required if reader is not provided.
-            If reader is provided, this parameter is ignored and the reader's
-            root path is used instead.
+        reader : DatasetReader
+            Reader instance for discovering data files. Use BIDSReader for BIDS datasets
+            or GlobReader for custom directory structures.
         output_root : str or Path, optional
             Path to output derivatives root. If not provided, defaults to
-            {reader_root}/derivatives/nice_preprocessing
+            {dataset_root}/derivatives/nice_preprocessing
         config : dict, optional
             Configuration dictionary containing pipeline steps and parameters
-        reader : DatasetReader, optional
-            Reader instance for discovering data files. If not provided,
-            a BIDSReader will be created using bids_root.
-            
-        Notes
-        -----
-        Either bids_root or reader must be provided.
         """
         self.config = config or {}
         self.output_root = Path(output_root) if output_root else None
-        
-        # Handle reader initialization
-        if reader is not None:
-            self.reader = reader
-        else:
-            # No reader provided, create a BIDS reader
-            if bids_root is None:
-                raise ValueError("Either bids_root or reader must be provided")
-            self.reader = BIDSReader(Path(bids_root))
+        self.reader = reader
 
     @property
-    def root_path(self) -> Path:
-        """Get the root path from the reader.
+    def dataset_root(self) -> Path:
+        """Get the dataset root path from the reader.
         
         Returns the reader's root directory, which may be bids_root or data_root
         depending on the reader type.
@@ -173,7 +156,7 @@ class EEGPreprocessingPipeline:
         if self.output_root:
             base = self.output_root
         else:
-            base = self.root_path / "derivatives" / "nice_preprocessing"
+            base = self.dataset_root / "derivatives" / "nice_preprocessing"
         
         if subdir:
             return base / subdir
@@ -425,7 +408,7 @@ class EEGPreprocessingPipeline:
             
             # Use get_entity_vals to find all existing values for this entity
             all_values = get_entity_vals(
-                root=self.root_path,
+                root=self.dataset_root,
                 entity_key=entity_key,
                 include_match=include_patterns
             )

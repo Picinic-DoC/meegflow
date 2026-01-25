@@ -157,15 +157,19 @@ You can also use the pipeline directly in Python:
 import sys
 sys.path.insert(0, 'src')
 from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+from readers import BIDSReader
 
 # Load configuration
 import yaml
 with open('configs/config_example.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
+# Create a BIDS reader
+reader = BIDSReader('/path/to/bids/dataset')
+
 # Initialize pipeline
 pipeline = EEGPreprocessingPipeline(
-    bids_root='/path/to/bids/dataset',
+    reader=reader,
     output_root='/path/to/derivatives',
     config=config
 )
@@ -229,9 +233,8 @@ reader = GlobReader(
 
 # Initialize pipeline with the glob reader
 pipeline = EEGPreprocessingPipeline(
-    bids_root='/path/to/data',
-    config=config,
-    reader=reader
+    reader=reader,
+    config=config
 )
 
 # Run pipeline

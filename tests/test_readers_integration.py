@@ -66,23 +66,24 @@ def create_mock_glob_dataset(data_root):
 
 
 def test_pipeline_with_bids_reader():
-    """Test that pipeline works with BIDSReader (default behavior)."""
+    """Test that pipeline works with BIDSReader."""
     from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from readers import BIDSReader
     
     with tempfile.TemporaryDirectory() as tmpdir:
         bids_root = create_mock_bids_dataset(tmpdir)
         
-        # Test 1: Pipeline without explicit reader (should use BIDS by default)
-        pipeline = EEGPreprocessingPipeline(bids_root=bids_root, config={})
+        # Create a BIDS reader and pass it to the pipeline
+        reader = BIDSReader(bids_root)
+        pipeline = EEGPreprocessingPipeline(reader=reader, config={})
         
         # Verify the reader is a BIDSReader
-        from readers import BIDSReader
         assert isinstance(pipeline.reader, BIDSReader), \
             f"Expected BIDSReader, got {type(pipeline.reader)}"
         
-        print("✓ Pipeline uses BIDSReader by default")
+        print("✓ Pipeline accepts BIDSReader")
         
-        # Test 2: Find recordings
+        # Test finding recordings
         recordings = pipeline.reader.find_recordings(subjects='01', tasks='rest')
         assert len(recordings) > 0, "Should find recordings"
         assert recordings[0]['metadata']['subject'] == '01', \
@@ -107,9 +108,8 @@ def test_pipeline_with_glob_reader():
         
         # Create pipeline with glob reader
         pipeline = EEGPreprocessingPipeline(
-            bids_root=data_root,
-            config={},
-            reader=reader
+            reader=reader,
+            config={}
         )
         
         # Verify the reader is a GlobReader

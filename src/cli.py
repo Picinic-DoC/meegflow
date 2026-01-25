@@ -154,8 +154,6 @@ def main():
     logger.info("Starting EEG preprocessing pipeline")
     
     # Create the appropriate reader
-    reader = None
-    
     if args.reader == 'bids':
         if not args.bids_root:
             logger.error("--bids-root is required when using BIDS reader")
@@ -190,20 +188,12 @@ def main():
     for arg, value in vars(args).items():
         logger.info(f"  {arg}: {value}")
     
-    # If reader is provided, don't pass bids_root (pipeline gets it from reader)
-    # If no reader, pass bids_root so pipeline can create a default BIDSReader
-    if reader:
-        pipeline = EEGPreprocessingPipeline(
-            output_root=args.output_root, 
-            config=config,
-            reader=reader
-        )
-    else:
-        pipeline = EEGPreprocessingPipeline(
-            bids_root=args.bids_root,
-            output_root=args.output_root, 
-            config=config
-        )
+    # Create pipeline with reader
+    pipeline = EEGPreprocessingPipeline(
+        reader=reader,
+        output_root=args.output_root, 
+        config=config
+    )
     results = pipeline.run_pipeline(
         subjects=args.subjects,
         sessions=args.sessions,

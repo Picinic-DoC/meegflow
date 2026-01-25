@@ -31,18 +31,13 @@ eeg-preprocess --bids-root /path/to/bids --config config.yaml
 from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
 from readers import BIDSReader
 
-# Option 1: Let the pipeline create a BIDS reader (default)
-pipeline = EEGPreprocessingPipeline(
-    bids_root='/path/to/bids',
-    config=config
-)
+# Create a BIDS reader
+reader = BIDSReader('/path/to/bids')
 
-# Option 2: Explicitly create a BIDS reader
-reader = BIDSReader(bids_root='/path/to/bids')
+# Initialize pipeline with the reader
 pipeline = EEGPreprocessingPipeline(
-    bids_root='/path/to/bids',
-    config=config,
-    reader=reader
+    reader=reader,
+    config=config
 )
 
 # Run the pipeline
@@ -112,9 +107,8 @@ reader = GlobReader(
 
 # Initialize the pipeline with the glob reader
 pipeline = EEGPreprocessingPipeline(
-    bids_root='/path/to/data',  # Used for output paths
-    config=config,
-    reader=reader
+    reader=reader,
+    config=config
 )
 
 # Run the pipeline
@@ -210,24 +204,28 @@ pattern = "sub-{subject}/sub-{subject}_task-{task}_eeg.vhdr"
 
 ## Migration from Legacy Code
 
-If you have existing code using `EEGPreprocessingPipeline`, no changes are required:
+If you have existing code using `EEGPreprocessingPipeline`, you need to update it to pass a reader:
 
 ```python
-# This still works (uses BIDSReader by default)
-pipeline = EEGPreprocessingPipeline(bids_root='/path/to/bids', config=config)
+# Old code (no longer works)
+# pipeline = EEGPreprocessingPipeline(bids_root='/path/to/bids', config=config)
+
+# New code - create a reader first
+from readers import BIDSReader
+reader = BIDSReader('/path/to/bids')
+pipeline = EEGPreprocessingPipeline(reader=reader, config=config)
 results = pipeline.run_pipeline(subjects=['01'], tasks='rest')
 ```
 
-To migrate to glob reader, simply create a reader and pass it:
+To use glob reader instead, simply create a GlobReader and pass it:
 
 ```python
 from readers import GlobReader
 
 reader = GlobReader('/path/to/data', 'your/pattern/here/{subject}_{task}.vhdr')
 pipeline = EEGPreprocessingPipeline(
-    bids_root='/path/to/data',
-    config=config,
-    reader=reader
+    reader=reader,
+    config=config
 )
 results = pipeline.run_pipeline(subjects=['01'], tasks='rest')
 ```

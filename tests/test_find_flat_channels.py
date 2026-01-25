@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from readers import BIDSReader
 """
 Functional tests for _step_find_flat_channels with synthetic data.
 
@@ -74,7 +75,7 @@ def test_find_flat_channels_basic():
         raw, expected_flat = create_test_raw_with_flat_channels()
         
         # Initialize pipeline
-        pipeline = EEGPreprocessingPipeline(bids_root='/tmp', config={})
+        pipeline = EEGPreprocessingPipeline(reader=BIDSReader('/tmp'), config={})
         
         # Prepare data dict
         data = {
@@ -135,7 +136,7 @@ def test_find_flat_channels_with_custom_threshold():
     try:
         raw, _ = create_test_raw_with_flat_channels()
         
-        pipeline = EEGPreprocessingPipeline(bids_root='/tmp', config={})
+        pipeline = EEGPreprocessingPipeline(reader=BIDSReader('/tmp'), config={})
         
         data = {
             'raw': raw,
@@ -208,7 +209,7 @@ def test_find_flat_channels_no_flat():
         
         raw = mne.io.RawArray(data, info, verbose=False)
         
-        pipeline = EEGPreprocessingPipeline(bids_root='/tmp', config={})
+        pipeline = EEGPreprocessingPipeline(reader=BIDSReader('/tmp'), config={})
         
         data_dict = {
             'raw': raw,
@@ -259,7 +260,7 @@ def test_find_flat_channels_all_flat():
         
         raw = mne.io.RawArray(data, info, verbose=False)
         
-        pipeline = EEGPreprocessingPipeline(bids_root='/tmp', config={})
+        pipeline = EEGPreprocessingPipeline(reader=BIDSReader('/tmp'), config={})
         
         data_dict = {
             'raw': raw,
@@ -297,7 +298,7 @@ def test_find_flat_channels_with_excluded_channels():
     try:
         raw, expected_flat = create_test_raw_with_flat_channels()
         
-        pipeline = EEGPreprocessingPipeline(bids_root='/tmp', config={})
+        pipeline = EEGPreprocessingPipeline(reader=BIDSReader('/tmp'), config={})
         
         data = {
             'raw': raw,
@@ -365,7 +366,7 @@ def test_find_flat_channels_with_picks():
         info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
         raw = mne.io.RawArray(data, info, verbose=False)
         
-        pipeline = EEGPreprocessingPipeline(bids_root='/tmp', config={})
+        pipeline = EEGPreprocessingPipeline(reader=BIDSReader('/tmp'), config={})
         
         data_dict = {
             'raw': raw,
@@ -415,7 +416,7 @@ def test_find_flat_channels_no_duplicate_bads():
         # Pre-mark one channel as bad
         raw.info['bads'] = ['EEG002']
         
-        pipeline = EEGPreprocessingPipeline(bids_root='/tmp', config={})
+        pipeline = EEGPreprocessingPipeline(reader=BIDSReader('/tmp'), config={})
         
         data = {
             'raw': raw,
@@ -453,7 +454,7 @@ def test_find_flat_channels_missing_raw():
     print("Testing find_flat_channels error handling for missing 'raw'...")
     
     try:
-        pipeline = EEGPreprocessingPipeline(bids_root='/tmp', config={})
+        pipeline = EEGPreprocessingPipeline(reader=BIDSReader('/tmp'), config={})
         
         # Data without 'raw'
         data = {
