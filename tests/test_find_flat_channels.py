@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from readers import BIDSReader
 """
 Functional tests for _step_find_flat_channels with synthetic data.
 
@@ -19,6 +18,7 @@ try:
     import mne
     from mne.utils import logger
     from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from readers import BIDSReader
     MNE_AVAILABLE = True
 except ImportError as e:
     MNE_AVAILABLE = False

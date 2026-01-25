@@ -34,9 +34,11 @@ def test_excluded_channels_integration():
         raw = mne.io.RawArray(data, info)
         
         # Create pipeline instance
+        from readers import BIDSReader
         config = {'pipeline': []}
+        reader = BIDSReader(repo_root / "test_data")
         pipeline = EEGPreprocessingPipeline(
-            bids_root=repo_root / "test_data",
+            reader=reader,
             config=config
         )
         
