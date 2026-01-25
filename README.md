@@ -4,6 +4,7 @@ A modular, configuration-driven EEG preprocessing pipeline using MNE-BIDS. The p
 
 ## Features
 
+- **Flexible File Discovery**: Support for both BIDS-formatted datasets and custom glob patterns
 - **MNE-BIDS Integration**: Seamlessly reads EEG data in BIDS format
 - **Modular Design**: Each preprocessing step is a separate function
 - **Configuration-Driven**: Choose steps, their order, and parameters via YAML
@@ -179,6 +180,65 @@ results = pipeline.run_pipeline(
 for subject, result in results.items():
     print(f"Subject {subject}: {result}")
 ```
+
+## File Discovery with Readers
+
+The pipeline supports two types of file readers for discovering data files:
+
+### BIDS Reader (Default)
+
+The BIDS reader uses MNE-BIDS to automatically discover files in BIDS-formatted datasets:
+
+```bash
+# BIDS reader is the default (--reader bids can be omitted)
+python src/cli.py \
+    --bids-root /path/to/bids/dataset \
+    --subjects 01 02 \
+    --tasks rest \
+    --config configs/config_example.yaml
+```
+
+### Glob Reader
+
+The glob reader allows you to work with custom directory structures using glob patterns with variable extraction:
+
+```bash
+python src/cli.py \
+    --reader glob \
+    --data-root /path/to/data \
+    --glob-pattern "sub-{subject}/ses-{session}/eeg/sub-{subject}_task-{task}_eeg.vhdr" \
+    --subjects 01 02 \
+    --tasks rest \
+    --config configs/config_example.yaml
+```
+
+**Pattern syntax:** Use `{variable_name}` placeholders which:
+- Convert to `*` wildcards for file matching
+- Extract matched values as metadata
+
+**Python API:**
+
+```python
+from readers import GlobReader
+
+# Create a glob reader with your custom pattern
+reader = GlobReader(
+    data_root='/path/to/data',
+    pattern='sub-{subject}/ses-{session}/eeg/sub-{subject}_task-{task}_eeg.vhdr'
+)
+
+# Initialize pipeline with the glob reader
+pipeline = EEGPreprocessingPipeline(
+    bids_root='/path/to/data',
+    config=config,
+    reader=reader
+)
+
+# Run pipeline
+results = pipeline.run_pipeline(subjects=['01', '02'], tasks='rest')
+```
+
+For detailed information on readers, pattern examples, and troubleshooting, see [READERS.md](READERS.md).
 
 ## Output Structure
 
