@@ -155,7 +155,6 @@ def main():
     
     # Create the appropriate reader
     reader = None
-    bids_root = args.bids_root
     
     if args.reader == 'bids':
         if not args.bids_root:
@@ -182,9 +181,6 @@ def main():
         
         from readers import GlobReader
         reader = GlobReader(args.data_root, args.glob_pattern)
-        
-        # For glob reader, use data_root as bids_root for output paths
-        bids_root = args.data_root
     
     if args.output_root:
         logger.info(f"Output root: {args.output_root}")
@@ -194,12 +190,20 @@ def main():
     for arg, value in vars(args).items():
         logger.info(f"  {arg}: {value}")
     
-    pipeline = EEGPreprocessingPipeline(
-        bids_root=bids_root, 
-        output_root=args.output_root, 
-        config=config,
-        reader=reader
-    )
+    # If reader is provided, don't pass bids_root (pipeline gets it from reader)
+    # If no reader, pass bids_root so pipeline can create a default BIDSReader
+    if reader:
+        pipeline = EEGPreprocessingPipeline(
+            output_root=args.output_root, 
+            config=config,
+            reader=reader
+        )
+    else:
+        pipeline = EEGPreprocessingPipeline(
+            bids_root=args.bids_root,
+            output_root=args.output_root, 
+            config=config
+        )
     results = pipeline.run_pipeline(
         subjects=args.subjects,
         sessions=args.sessions,

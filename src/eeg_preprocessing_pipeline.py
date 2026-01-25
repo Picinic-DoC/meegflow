@@ -97,6 +97,7 @@ import matplotlib.pyplot as plt
 import importlib.util
 import sys
 import inspect
+from readers import BIDSReader
 
 if TYPE_CHECKING:
     from readers import DatasetReader
@@ -115,9 +116,11 @@ class EEGPreprocessingPipeline:
         ----------
         bids_root : str or Path, optional
             Path to BIDS root directory. Required if reader is not provided.
+            If reader is provided, this parameter is ignored and the reader's
+            root path is used instead.
         output_root : str or Path, optional
             Path to output derivatives root. If not provided, defaults to
-            bids_root/derivatives/nice_preprocessing
+            {reader_root}/derivatives/nice_preprocessing
         config : dict, optional
             Configuration dictionary containing pipeline steps and parameters
         reader : DatasetReader, optional
@@ -126,35 +129,57 @@ class EEGPreprocessingPipeline:
             
         Notes
         -----
-        Either bids_root or reader must be provided. If both are provided,
-        the reader takes precedence.
+        Either bids_root or reader must be provided.
         """
         self.config = config or {}
+        self.output_root = Path(output_root) if output_root else None
         
         # Handle reader initialization
         if reader is not None:
             self.reader = reader
-            # If reader is provided but bids_root is not, try to get it from reader
-            if bids_root is None:
-                if hasattr(reader, 'bids_root'):
-                    self.bids_root = Path(reader.bids_root)
-                elif hasattr(reader, 'data_root'):
-                    self.bids_root = Path(reader.data_root)
-                else:
-                    raise ValueError("bids_root must be provided when using a custom reader without bids_root or data_root attribute")
-            else:
-                self.bids_root = Path(bids_root)
         else:
             # No reader provided, create a BIDS reader
             if bids_root is None:
                 raise ValueError("Either bids_root or reader must be provided")
-            
-            self.bids_root = Path(bids_root)
-            # Import here to avoid circular imports
-            from readers import BIDSReader
-            self.reader = BIDSReader(self.bids_root)
+            self.reader = BIDSReader(Path(bids_root))
 
-        # Map step names to their corresponding methods
+    @property
+    def root_path(self) -> Path:
+        """Get the root path from the reader.
+        
+        Returns the reader's root directory, which may be bids_root or data_root
+        depending on the reader type.
+        """
+        if hasattr(self.reader, 'bids_root'):
+            return self.reader.bids_root
+        elif hasattr(self.reader, 'data_root'):
+            return self.reader.data_root
+        else:
+            raise AttributeError("Reader does not have a bids_root or data_root attribute")
+    
+    def _get_derivatives_root(self, subdir: str = "") -> Path:
+        """Get the derivatives root directory.
+        
+        Parameters
+        ----------
+        subdir : str, optional
+            Subdirectory within derivatives/nice_preprocessing
+            
+        Returns
+        -------
+        Path
+            Path to derivatives directory
+        """
+        if self.output_root:
+            base = self.output_root
+        else:
+            base = self.root_path / "derivatives" / "nice_preprocessing"
+        
+        if subdir:
+            return base / subdir
+        return base
+
+    # Map step names to their corresponding methods
         self.step_functions = {
             'strip_recording': self._step_strip_recording,
             'concatenate_recordings': self._step_concatenate_recordings,
@@ -400,7 +425,7 @@ class EEGPreprocessingPipeline:
             
             # Use get_entity_vals to find all existing values for this entity
             all_values = get_entity_vals(
-                root=self.bids_root,
+                root=self.root_path,
                 entity_key=entity_key,
                 include_match=include_patterns
             )
@@ -1542,7 +1567,7 @@ class EEGPreprocessingPipeline:
             raise ValueError(f"save_clean_instances step requires '{instance}' to be present in data (either 'raw' or 'epochs')")
         
         # Derivatives root for this pipeline
-        deriv_root = self.bids_root / "derivatives" / "nice_preprocessing" / instance
+        deriv_root = self._get_derivatives_root(instance)
 
         bids_path = BIDSPath(
             subject=data['subject'],
@@ -1589,7 +1614,7 @@ class EEGPreprocessingPipeline:
             )
 
         # Derivatives root for this pipeline
-        deriv_root = self.bids_root / "derivatives" / "nice_preprocessing" / "reports"
+        deriv_root = self._get_derivatives_root("reports")
 
         bids_path = BIDSPath(
             subject=data['subject'],
@@ -1917,7 +1942,7 @@ class EEGPreprocessingPipeline:
             )
 
         # Derivatives root for this pipeline
-        deriv_root = self.bids_root / "derivatives" / "nice_preprocessing" / "reports"
+        deriv_root = self._get_derivatives_root("reports")
 
         bids_path = BIDSPath(
             subject=data['subject'],
