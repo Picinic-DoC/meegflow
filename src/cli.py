@@ -229,7 +229,7 @@ def main():
                 logger.info(f"  - Task: {task}, Session: {session}, Epochs: {n_epochs}")
     
     # Also write results to JSON file for easy processing
-    output_json = Path(args.bids_root) / "derivatives" / "nice_preprocessing" / "pipeline_results.json"
+    output_json = Path(pipeline.dataset_root) / "derivatives" / "nice_preprocessing" / "pipeline_results.json"
     output_json.parent.mkdir(parents=True, exist_ok=True)
     with open(output_json, 'w') as f:
         json.dump(results, f, indent=2, cls=NpEncoder)

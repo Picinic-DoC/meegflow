@@ -80,7 +80,13 @@ results = pipeline.run_pipeline(
 
 See README.md for detailed documentation and examples.
 """
+
+
 from __future__ import annotations
+
+import os
+os.environ["MPLBACKEND"] = "Agg"
+
 from itertools import product
 from pathlib import Path
 from typing import Union, Dict, Any, List, Callable, TYPE_CHECKING
@@ -126,43 +132,7 @@ class EEGPreprocessingPipeline:
         self.output_root = Path(output_root) if output_root else None
         self.reader = reader
 
-    @property
-    def dataset_root(self) -> Path:
-        """Get the dataset root path from the reader.
-        
-        Returns the reader's root directory, which may be bids_root or data_root
-        depending on the reader type.
-        """
-        if hasattr(self.reader, 'bids_root'):
-            return self.reader.bids_root
-        elif hasattr(self.reader, 'data_root'):
-            return self.reader.data_root
-        else:
-            raise AttributeError("Reader does not have a bids_root or data_root attribute")
-    
-    def _get_derivatives_root(self, subdir: str = "") -> Path:
-        """Get the derivatives root directory.
-        
-        Parameters
-        ----------
-        subdir : str, optional
-            Subdirectory within derivatives/nice_preprocessing
-            
-        Returns
-        -------
-        Path
-            Path to derivatives directory
-        """
-        if self.output_root:
-            base = self.output_root
-        else:
-            base = self.dataset_root / "derivatives" / "nice_preprocessing"
-        
-        if subdir:
-            return base / subdir
-        return base
-
-    # Map step names to their corresponding methods
+        # Map step names to their corresponding methods
         self.step_functions = {
             'strip_recording': self._step_strip_recording,
             'concatenate_recordings': self._step_concatenate_recordings,
@@ -201,6 +171,42 @@ class EEGPreprocessingPipeline:
         unknown = [s.get('name') for s in pipeline_cfg if s.get('name') not in self.step_functions]
         if unknown:
             raise ValueError(f"Unknown pipeline steps in config: {unknown}")
+
+    @property
+    def dataset_root(self) -> Path:
+        """Get the dataset root path from the reader.
+        
+        Returns the reader's root directory, which may be bids_root or data_root
+        depending on the reader type.
+        """
+        if hasattr(self.reader, 'bids_root'):
+            return self.reader.bids_root
+        elif hasattr(self.reader, 'data_root'):
+            return self.reader.data_root
+        else:
+            raise AttributeError("Reader does not have a bids_root or data_root attribute")
+    
+    def _get_derivatives_root(self, subdir: str = "") -> Path:
+        """Get the derivatives root directory.
+        
+        Parameters
+        ----------
+        subdir : str, optional
+            Subdirectory within derivatives/nice_preprocessing
+            
+        Returns
+        -------
+        Path
+            Path to derivatives directory
+        """
+        if self.output_root:
+            base = self.output_root
+        else:
+            base = self.dataset_root / "derivatives" / "nice_preprocessing"
+        
+        if subdir:
+            return base / subdir
+        return base
 
     def _load_custom_steps(self, custom_steps_folder: Union[str, Path]) -> Dict[str, Callable]:
         """
@@ -1245,12 +1251,14 @@ class EEGPreprocessingPipeline:
         get_events_from = step_config.get('get_events_from', 'annotations')
         shortest_event = step_config.get('shortest_event', 1)
         event_id = step_config.get('event_id', 'auto')
+        stim_channel = step_config.get('stim_channel', None)
         
         data['events'], found_event_id = self._find_events_from_raw(
             data['raw'],
             get_events_from=get_events_from,
             shortest_event=shortest_event,
-            event_id=event_id
+            event_id=event_id,
+            stim_channel=stim_channel
         )
         data['event_id'] = found_event_id
         data['events_sfreq'] = data['raw'].info['sfreq']
@@ -2109,7 +2117,7 @@ class EEGPreprocessingPipeline:
                 pipeline_steps = self._get_pipeline_steps()
                 
                 # Create a task for the current recording's steps
-                step_task = progress.add_task(
+                step_task_id = progress.add_task(
                     f"[cyan]{recording_name}", 
                     total=len(pipeline_steps)
                 )
@@ -2119,7 +2127,7 @@ class EEGPreprocessingPipeline:
                         paths=paths,
                         metadata=metadata,
                         progress=progress, 
-                        step_task=step_task
+                        task_id=step_task_id
                     )
                     
                     # Use subject from metadata if available, otherwise use first available key
@@ -2134,7 +2142,7 @@ class EEGPreprocessingPipeline:
                     raise exc
                 finally:
                     # Remove the step task after this recording is done
-                    progress.remove_task(step_task)
+                    progress.remove_task(step_task_id)
                 
                 # Update overall progress
                 progress.update(overall_task, completed=i+1)
