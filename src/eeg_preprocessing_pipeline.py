@@ -80,9 +80,10 @@ results = pipeline.run_pipeline(
 
 See README.md for detailed documentation and examples.
 """
+from __future__ import annotations
 from itertools import product
 from pathlib import Path
-from typing import Union, Dict, Any, List, Callable
+from typing import Union, Dict, Any, List, Callable, TYPE_CHECKING
 import json
 import mne
 from mne.utils import logger
@@ -97,13 +98,16 @@ import importlib.util
 import sys
 import inspect
 
+if TYPE_CHECKING:
+    from readers import DatasetReader
+
 class EEGPreprocessingPipeline:
     def __init__(
         self, 
         bids_root: Union[str, Path] = None, 
         output_root: Union[str, Path] = None, 
         config: Dict[str, Any] = None,
-        reader: 'DatasetReader' = None
+        reader: DatasetReader = None
     ):
         """Initialize EEG preprocessing pipeline.
         
@@ -1983,7 +1987,6 @@ class EEGPreprocessingPipeline:
             data['all_raw'] = [read_raw_bids(bids_path=bp, verbose=False) for bp in paths]
         else:
             # Use mne.io.read_raw for regular paths
-            import mne.io
             data['all_raw'] = [mne.io.read_raw(str(p), preload=True, verbose=False) for p in paths]
 
         # Ensure data are loaded into memory for processing
