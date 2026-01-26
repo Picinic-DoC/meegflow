@@ -30,6 +30,8 @@ setup(
     entry_points={
         "console_scripts": [
             "eeg-preprocess=cli:main",
+            "eeg-preprocess-only=preprocessing_cli:preprocessing_main",
+            "eeg-generate-reports=report_cli:report_main",
         ],
     },
     classifiers=[

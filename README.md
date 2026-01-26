@@ -2,11 +2,26 @@
 
 A modular, configuration-driven EEG preprocessing pipeline using MNE-BIDS. The pipeline uses auxiliary functions for each preprocessing step, allowing you to choose which steps to run, their order, and their parameters through a simple YAML configuration.
 
+## Architecture
+
+The pipeline is split into two independent modules that can run separately or together:
+
+### 🔧 Preprocessing Module
+Handles all EEG data preprocessing steps (filtering, ICA, bad channel detection, epoching, etc.) and saves intermediate results. See [README_preprocessing.md](README_preprocessing.md) for details.
+
+### 📊 Report Module
+Generates JSON and HTML reports from saved intermediate results. Can run independently after preprocessing is complete. See [README_report.md](README_report.md) for details.
+
+### 🔄 Combined Pipeline (Original Behavior)
+The original combined pipeline (`eeg-preprocess` command) is still available for backward compatibility.
+
 ## Features
 
 - **Flexible File Discovery**: Support for both BIDS-formatted datasets and custom glob patterns
 - **MNE-BIDS Integration**: Seamlessly reads EEG data in BIDS format
 - **Modular Design**: Each preprocessing step is a separate function
+- **Split Architecture**: Run preprocessing and reporting separately or together
+- **Intermediate Results**: Save and reuse preprocessed data
 - **Configuration-Driven**: Choose steps, their order, and parameters via YAML
 - **Custom Steps Support**: Extend the pipeline with your own preprocessing functions
 - **Progress Tracking**: Rich progress bars show real-time progress for recordings and preprocessing steps
@@ -14,10 +29,16 @@ A modular, configuration-driven EEG preprocessing pipeline using MNE-BIDS. The p
 - **Multiple Output Formats**:
   - Clean preprocessed epochs in `.fif` format
   - Clean preprocessed raw data in `.fif` format
+  - Intermediate results (pickled data objects)
   - Interactive HTML reports using MNE Report
   - JSON reports for easy downstream processing
 - **Batch Processing**: Process multiple subjects sequentially
-- **Command-line Interface**: Easy to use from the terminal
+- **Multiple Command-line Interfaces**: 
+  - `eeg-preprocess` - Combined preprocessing + reporting (original)
+  - `eeg-preprocess-only` - Preprocessing only with intermediate results
+  - `eeg-generate-reports` - Report generation from intermediate results
+- **Docker Support**: Separate containers for preprocessing and reporting
+- **Docker Compose**: Orchestrate both modules together
 
 ## Installation
 
@@ -25,20 +46,57 @@ A modular, configuration-driven EEG preprocessing pipeline using MNE-BIDS. The p
 
 Using Docker is the easiest way to get started, as it includes all dependencies and system libraries.
 
-1. Build the Docker image:
+#### Option 1a: Docker Compose (Easiest)
+
 ```bash
 git clone https://github.com/Laouen/nice-preprocessing.git
 cd nice-preprocessing
-docker build -t nice-preprocessing .
+
+# Set your data directory
+export BIDS_ROOT=/path/to/bids
+export CONFIG_DIR=$(pwd)/configs
+
+# Build all containers
+docker-compose build
+
+# Run preprocessing only
+docker-compose run --rm preprocessing \
+    --bids-root /data \
+    --config /configs/config_example.yaml
+
+# Generate reports
+docker-compose run --rm report \
+    --bids-root /data \
+    --all
+
+# Or run combined pipeline (original behavior)
+docker-compose run --rm combined \
+    --bids-root /data \
+    --config /configs/config_example.yaml
 ```
 
-2. Run the container:
+#### Option 1b: Individual Docker Images
+
+Build and use specific images:
+
 ```bash
-docker run --rm -v /path/to/bids/data:/data nice-preprocessing \
+# Combined pipeline (original)
+docker build -t nice-preprocessing .
+docker run --rm -v /path/to/bids:/data nice-preprocessing \
     --bids-root /data \
-    --subjects 01 02 \
-    --tasks rest \
     --config /app/configs/config_example.yaml
+
+# Preprocessing only
+docker build -f Dockerfile.preprocessing -t nice-preprocessing-module .
+docker run --rm -v /path/to/bids:/data nice-preprocessing-module \
+    --bids-root /data \
+    --config /app/configs/config_example.yaml
+
+# Report generation
+docker build -f Dockerfile.report -t nice-report-generator .
+docker run --rm -v /path/to/bids:/data nice-report-generator \
+    --bids-root /data \
+    --all
 ```
 
 ### Option 2: Local Installation
@@ -61,43 +119,70 @@ pip install -e .
 
 ## Usage
 
-### Using Docker
+The pipeline now supports three workflow modes:
 
-To use the Docker image, mount your BIDS dataset directory to `/data` in the container. The outputs will be written to the `derivatives/nice_preprocessing` subdirectory within your BIDS root.
+### 1. Split Workflow (Recommended for Flexibility)
 
-**Basic usage:**
+Run preprocessing and report generation separately:
+
 ```bash
-docker run --rm \
-    -v /path/to/bids:/data \
-    nice-preprocessing \
-    --bids-root /data \
-    --tasks rest
+# Step 1: Run preprocessing with intermediate results
+eeg-preprocess-only \
+    --bids-root /path/to/bids \
+    --config configs/config_with_save.yaml
+
+# Step 2: Generate reports (can be done later, on different machine, etc.)
+eeg-generate-reports \
+    --bids-root /path/to/bids \
+    --all
 ```
 
-**With custom configuration:**
+**Benefits:**
+- Generate reports multiple times without reprocessing
+- Run preprocessing on HPC, generate reports locally
+- Save time when experimenting with report parameters
+- Can delete intermediate results after verification to save space
+
+See [README_preprocessing.md](README_preprocessing.md) and [README_report.md](README_report.md) for detailed documentation.
+
+### 2. Combined Workflow (Original Behavior)
+
+Run preprocessing and reporting together in one command:
+
 ```bash
-docker run --rm \
-    -v /path/to/bids:/data \
-    -v /path/to/custom/config.yaml:/config.yaml \
-    nice-preprocessing \
-    --bids-root /data \
-    --subjects 01 02 03 \
-    --tasks rest \
-    --config /config.yaml
+eeg-preprocess \
+    --bids-root /path/to/bids \
+    --config configs/config_example.yaml
 ```
 
-**With log file output:**
+**Benefits:**
+- Single command workflow
+- Backward compatible with existing scripts
+- No intermediate results storage needed
+
+### 3. Docker Compose Workflow
+
+Use docker-compose for orchestrated multi-container setup:
+
 ```bash
-docker run --rm \
-    -v /path/to/bids:/data \
-    -v /path/to/logs:/logs \
-    nice-preprocessing \
+# Set environment variables
+export BIDS_ROOT=/path/to/bids
+export CONFIG_DIR=$(pwd)/configs
+
+# Run preprocessing
+docker-compose run --rm preprocessing \
     --bids-root /data \
-    --tasks rest \
-    --log-file /logs/pipeline.log
+    --config /configs/config_with_save.yaml
+
+# Generate reports
+docker-compose run --rm report \
+    --bids-root /data \
+    --all
 ```
 
-**Processing specific sessions:**
+## Quick Start Examples
+
+### Example 1: Complete Split Workflow
 ```bash
 docker run --rm \
     -v /path/to/bids:/data \
@@ -108,39 +193,232 @@ docker run --rm \
     --tasks rest
 ```
 
-### Using Local Installation
-
-#### Process Multiple Subjects
-
-Run the preprocessing pipeline on multiple subjects:
 
 ```bash
-python src/cli.py \
-    --bids-root /path/to/bids/dataset \
+# Preprocessing with specific subjects
+eeg-preprocess-only \
+    --bids-root /path/to/bids \
     --subjects 01 02 03 \
     --tasks rest \
-    --config configs/config_example.yaml
+    --config configs/config_with_save.yaml
+
+# Generate reports for those subjects
+eeg-generate-reports \
+    --bids-root /path/to/bids \
+    --subjects 01 02 03
 ```
 
-If you installed the package with `pip install -e .`, you can use the `eeg-preprocess` command:
+### Example 2: Combined Workflow (Original)
 
 ```bash
 eeg-preprocess \
-    --bids-root /path/to/bids/dataset \
+    --bids-root /path/to/bids \
     --subjects 01 02 03 \
     --tasks rest \
     --config configs/config_example.yaml
 ```
 
-Process all subjects with a specific task:
+### Example 3: Docker Workflow
 
 ```bash
-python src/cli.py \
-    --bids-root /path/to/bids/dataset \
-    --tasks rest
+# Preprocessing
+docker run --rm -v /path/to/bids:/data \
+    nice-preprocessing-module \
+    --bids-root /data \
+    --config /app/configs/config_with_save.yaml
+
+# Report generation
+docker run --rm -v /path/to/bids:/data \
+    nice-report-generator \
+    --bids-root /data \
+    --all
 ```
 
-Process specific subjects with multiple tasks:
+## Configuration
+
+### For Split Workflow
+
+Your configuration file must include the `save_intermediate_results` step:
+
+```yaml
+pipeline:
+  - name: bandpass_filter
+    l_freq: 0.5
+    h_freq: 40.0
+  
+  - name: reference
+    ref_channels: average
+    instance: 'raw'
+  
+  - name: find_events
+    shortest_event: 1
+  
+  - name: epoch
+    tmin: -0.2
+    tmax: 0.8
+    baseline: [null, 0]
+  
+  # Save intermediate results for later report generation
+  - name: save_intermediate_results
+    save_raw: true
+    save_epochs: true
+    save_ica: true
+```
+
+### For Combined Workflow
+
+Include report generation steps in your configuration:
+
+```yaml
+pipeline:
+  - name: bandpass_filter
+    l_freq: 0.5
+    h_freq: 40.0
+  
+  # ... other preprocessing steps ...
+  
+  - name: save_clean_instance
+    instance: epochs
+  
+  - name: generate_json_report
+  
+  - name: generate_html_report
+```
+
+See `configs/` directory for more examples.
+
+## Module Documentation
+
+For detailed documentation on each module:
+
+- **[README_preprocessing.md](README_preprocessing.md)** - Complete guide to the preprocessing module
+  - All preprocessing steps and their parameters
+  - Intermediate results format
+  - Command-line arguments
+  - Docker usage
+  - Python API examples
+
+- **[README_report.md](README_report.md)** - Complete guide to the report generation module
+  - Report contents and formats
+  - Command-line arguments
+  - Docker usage
+  - Python API examples
+  - Workflow patterns
+
+- **[SPLIT_MODULES_DOCUMENTATION.md](SPLIT_MODULES_DOCUMENTATION.md)** - Technical documentation on the split architecture
+  - Design decisions
+  - API reference
+  - Migration guide
+  - Troubleshooting
+
+## Available Commands
+
+After installation (`pip install -e .`), you have access to three CLI commands:
+
+| Command | Purpose | Module |
+|---------|---------|--------|
+| `eeg-preprocess` | Combined preprocessing + reporting (original) | Combined |
+| `eeg-preprocess-only` | Preprocessing with intermediate results | Preprocessing |
+| `eeg-generate-reports` | Report generation from intermediate results | Report |
+
+## Docker Images
+
+Three Docker images are available:
+
+| Image | Dockerfile | Purpose | Entry Point |
+|-------|-----------|---------|-------------|
+| `nice-preprocessing` | `Dockerfile` | Combined pipeline | `eeg-preprocess` |
+| `nice-preprocessing-module` | `Dockerfile.preprocessing` | Preprocessing only | `eeg-preprocess-only` |
+| `nice-report-generator` | `Dockerfile.report` | Report generation | `eeg-generate-reports` |
+
+
+```
+bids_root/derivatives/nice_preprocessing/
+├── intermediate/                           # Intermediate results (split workflow)
+│   └── sub-{subject}_ses-{session}_task-{task}_acq-{acquisition}/
+│       ├── metadata.json                   # Preprocessing steps and parameters
+│       ├── raw.pkl                         # Raw data object
+│       ├── epochs.pkl                      # Epochs object
+│       ├── ica.pkl                         # ICA object
+│       └── events.pkl                      # Events array
+│
+├── raw/                                    # Clean raw data (.fif files)
+│   └── sub-{subject}/[ses-{session}/]eeg/
+│       └── sub-{subject}_[ses-{session}_]task-{task}_[acq-{acquisition}_]
+│           processing-clean_desc-cleaned_epo.fif
+│
+├── epochs/                                 # Clean epochs (.fif files)
+│   └── sub-{subject}/[ses-{session}/]eeg/
+│       └── sub-{subject}_[ses-{session}_]task-{task}_[acq-{acquisition}_]
+│           processing-clean_desc-cleaned_epo.fif
+│
+└── reports/                                # JSON and HTML reports
+    └── sub-{subject}/[ses-{session}/]eeg/
+        ├── sub-{subject}_[ses-{session}_]task-{task}_[acq-{acquisition}_]
+        │   processing-clean_desc-cleaned_report.json
+        └── sub-{subject}_[ses-{session}_]task-{task}_[acq-{acquisition}_]
+            processing-clean_desc-cleaned_report.html
+```
+
+## Python API Usage
+
+### Combined Pipeline (Original)
+
+```python
+from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+import yaml
+
+# Load configuration
+with open('configs/config_example.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+
+# Initialize and run
+pipeline = EEGPreprocessingPipeline(
+    bids_root='/path/to/bids',
+    config=config
+)
+results = pipeline.run_pipeline(subjects=['01', '02'], tasks='rest')
+```
+
+### Split Workflow - Preprocessing
+
+```python
+from preprocessing_pipeline import PreprocessingPipeline
+import yaml
+
+# Load configuration (with save_intermediate_results step)
+with open('configs/config_with_save.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+
+# Run preprocessing
+pipeline = PreprocessingPipeline(
+    bids_root='/path/to/bids',
+    config=config
+)
+results = pipeline.run_pipeline(subjects=['01', '02'], tasks='rest')
+```
+
+### Split Workflow - Report Generation
+
+```python
+from report_generator import ReportGenerator
+
+# Initialize report generator
+report_gen = ReportGenerator(bids_root='/path/to/bids')
+
+# Generate reports for all intermediate results
+report_gen.generate_all_reports()
+
+# Or for specific recording
+report_gen.generate_reports(
+    subject='01',
+    session='01',
+    task='rest',
+    acquisition=None
+)
+```
+
+## Available Preprocessing Steps
 
 ```bash
 python src/cli.py \
