@@ -3,51 +3,60 @@
 Command-Line Interface for EEG Preprocessing Pipeline.
 
 This module provides a command-line interface for running the EEG preprocessing
-pipeline on BIDS-formatted datasets. It handles argument parsing, logging configuration,
-and pipeline execution.
+pipeline on datasets. It supports both BIDS-formatted datasets and custom glob
+pattern matching for flexible file discovery.
 
 Main Functions
 --------------
 main() : Entry point for the CLI
-    Parses command-line arguments, configures logging, initializes the pipeline,
-    and executes preprocessing on specified subjects/sessions/tasks.
+    Parses command-line arguments, configures logging, initializes the pipeline
+    with the specified reader, and executes preprocessing on specified subjects/sessions/tasks.
 
 _parse_args() : Argument parser
     Defines and parses all command-line arguments including:
-    - BIDS dataset location
+    - Reader selection (BIDS or glob)
+    - Dataset location (BIDS root or data root)
     - Subject/session/task filters
     - Configuration file path
     - Logging options
 
 Command-Line Usage
 ------------------
-Basic usage:
+Basic BIDS usage (default):
     python src/cli.py --bids-root /path/to/bids --config config.yaml
 
 With subject and task filtering:
     python src/cli.py --bids-root /path/to/bids --subjects 01 02 --tasks rest
+
+Using glob pattern matching:
+    python src/cli.py --reader glob --data-root /path/to/data \\
+        --glob-pattern "sub-{subject}/ses-{session}/eeg/sub-{subject}_task-{task}_eeg.vhdr" \\
+        --subjects 01 02 --tasks rest
 
 With logging to file:
     python src/cli.py --bids-root /path/to/bids --log-file pipeline.log --log-level DEBUG
 
 Available Arguments
 -------------------
-Required:
-  --bids-root        Path to BIDS root directory
+Reader selection:
+  --reader            Reader type: "bids" (default) or "glob"
+  --bids-root         Path to BIDS root (required for BIDS reader)
+  --data-root         Path to data root (required for glob reader)
+  --glob-pattern      Glob pattern with {variable} placeholders (required for glob reader)
 
 Optional filters (if not specified, all matching files are processed):
-  --subjects         Subject ID(s) to process
-  --sessions         Session ID(s) to process
-  --tasks            Task name(s) to process
-  --acquisitions     Acquisition parameter(s) to process
-  --runs             Run number(s) to process
-  --extension        File extension (default: .vhdr)
+  --subjects          Subject ID(s) to process
+  --sessions          Session ID(s) to process
+  --tasks             Task name(s) to process
+  --acquisitions      Acquisition parameter(s) to process
+  --runs              Run number(s) to process
+  --extension         File extension (default: .vhdr)
 
 Other options:
-  --output-root      Custom output path (default: bids-root/derivatives/nice-preprocessing)
-  --config           Path to YAML configuration file
-  --log-file         Path to log file (default: console output)
-  --log-level        Logging level: DEBUG, INFO, WARNING, ERROR (default: INFO)
+  --output-root       Custom output path (default: bids-root/derivatives/nice-preprocessing)
+  --config            Path to YAML configuration file
+  --log-file          Path to log file (default: console output)
+  --log-level         Logging level: DEBUG, INFO, WARNING, ERROR (default: INFO)
 
 See README.md for detailed examples and documentation.
 """
@@ -61,8 +70,30 @@ from utils import NpEncoder
 
 def _parse_args():
     parser = argparse.ArgumentParser(description='Run EEG preprocessing pipeline on one or more subjects.')
-    parser.add_argument('--bids-root', required=True, help='Path to BIDS root.')
+    parser.add_argument('--bids-root', required=False, help='Path to BIDS root (required for BIDS reader).')
     parser.add_argument('--output-root', required=False, help='Path to output derivatives root.')
+    
+    # Reader selection
+    parser.add_argument(
+        '--reader',
+        type=str,
+        default='bids',
+        choices=['bids', 'glob'],
+        help='Reader type: "bids" for BIDS datasets or "glob" for glob pattern matching (default: bids).'
+    )
+    parser.add_argument(
+        '--data-root',
+        type=str,
+        required=False,
+        help='Path to data root directory (required for glob reader).'
+    )
+    parser.add_argument(
+        '--glob-pattern',
+        type=str,
+        required=False,
+        help='Glob pattern with {variable} placeholders for glob reader, e.g., "data/sub-{subject}/ses-{session}/eeg/sub-{subject}_task-{task}_eeg.vhdr"'
+    )
+    
     parser.add_argument(
         '--subjects',
         nargs='+',
@@ -121,7 +152,34 @@ def main():
             config = yaml.safe_load(f)
 
     logger.info("Starting EEG preprocessing pipeline")
-    logger.info(f"BIDS root: {args.bids_root}")
+    
+    # Create the appropriate reader
+    if args.reader == 'bids':
+        if not args.bids_root:
+            logger.error("--bids-root is required when using BIDS reader")
+            raise ValueError("--bids-root is required when using BIDS reader")
+        
+        logger.info(f"Using BIDS reader")
+        logger.info(f"BIDS root: {args.bids_root}")
+        
+        from readers import BIDSReader
+        reader = BIDSReader(args.bids_root)
+        
+    elif args.reader == 'glob':
+        if not args.data_root:
+            logger.error("--data-root is required when using glob reader")
+            raise ValueError("--data-root is required when using glob reader")
+        if not args.glob_pattern:
+            logger.error("--glob-pattern is required when using glob reader")
+            raise ValueError("--glob-pattern is required when using glob reader")
+        
+        logger.info(f"Using glob reader")
+        logger.info(f"Data root: {args.data_root}")
+        logger.info(f"Glob pattern: {args.glob_pattern}")
+        
+        from readers import GlobReader
+        reader = GlobReader(args.data_root, args.glob_pattern)
+    
     if args.output_root:
         logger.info(f"Output root: {args.output_root}")
     
@@ -130,7 +188,12 @@ def main():
     for arg, value in vars(args).items():
         logger.info(f"  {arg}: {value}")
     
-    pipeline = EEGPreprocessingPipeline(bids_root=args.bids_root, output_root=args.output_root, config=config)
+    # Create pipeline with reader
+    pipeline = EEGPreprocessingPipeline(
+        reader=reader,
+        output_root=args.output_root, 
+        config=config
+    )
     results = pipeline.run_pipeline(
         subjects=args.subjects,
         sessions=args.sessions,
@@ -166,7 +229,7 @@ def main():
                 logger.info(f"  - Task: {task}, Session: {session}, Epochs: {n_epochs}")
     
     # Also write results to JSON file for easy processing
-    output_json = Path(args.bids_root) / "derivatives" / "nice_preprocessing" / "pipeline_results.json"
+    output_json = Path(pipeline.dataset_root) / "derivatives" / "nice_preprocessing" / "pipeline_results.json"
     output_json.parent.mkdir(parents=True, exist_ok=True)
     with open(output_json, 'w') as f:
         json.dump(results, f, indent=2, cls=NpEncoder)

@@ -16,6 +16,7 @@ src_dir = repo_root / "src"
 sys.path.insert(0, str(src_dir))
 
 from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+from readers import BIDSReader
 
 
 def create_mock_raw_with_montage():
@@ -60,7 +61,8 @@ def test_bad_channels_topoplot_generation():
         bids_root = Path(tmpdir)
         
         # Initialize pipeline
-        pipeline = EEGPreprocessingPipeline(bids_root=bids_root)
+        reader = BIDSReader(bids_root)
+        pipeline = EEGPreprocessingPipeline(reader=reader)
         
         # Create mock data dictionary with preprocessing steps that have bad channels
         data = {
@@ -109,7 +111,8 @@ def test_preprocessing_steps_table_generation():
         bids_root = Path(tmpdir)
         
         # Initialize pipeline
-        pipeline = EEGPreprocessingPipeline(bids_root=bids_root)
+        reader = BIDSReader(bids_root)
+        pipeline = EEGPreprocessingPipeline(reader=reader)
         
         # Create mock data dictionary with preprocessing steps
         data = {
@@ -186,7 +189,8 @@ def test_html_report_without_bad_channels():
         bids_root = Path(tmpdir)
         
         # Initialize pipeline
-        pipeline = EEGPreprocessingPipeline(bids_root=bids_root)
+        reader = BIDSReader(bids_root)
+        pipeline = EEGPreprocessingPipeline(reader=reader)
         
         # Create mock data dictionary
         data = {
