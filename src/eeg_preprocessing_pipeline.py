@@ -1220,6 +1220,49 @@ class EEGPreprocessingPipeline:
 
         ica.exclude = sorted(excluded_components.keys())
 
+        # ---------------------------------------------------------
+        # Save ICA topographies for excluded components (PNG)
+        # ---------------------------------------------------------
+        try:
+            excluded = list(ica.exclude) if ica.exclude else []
+            if excluded:
+                figs = ica.plot_components(picks=excluded, show=False)
+
+                # MNE may return a single Figure or a list
+                if not isinstance(figs, list):
+                    figs = [figs]
+
+                sub = str(data.get("subject", "unknown"))
+                ses = str(data.get("session", "unknown"))
+
+                out_dir = (
+                    self.bids_root
+                    / "derivatives"
+                    / "nice_preprocessing"
+                    / "ica_topos"
+                    / f"sub-{sub}"
+                    / f"ses-{ses}"
+                    / "eeg"
+                )
+                out_dir.mkdir(parents=True, exist_ok=True)
+
+                # Important: plot_components can return multiple figures depending on MNE version/layout.
+                # We try to map 1 fig <-> 1 component; if mismatch, we still save sequentially.
+                if len(figs) == len(excluded):
+                    pairs = zip(excluded, figs)
+                else:
+                    # Fallback: save all figs sequentially
+                    pairs = [(excluded[i] if i < len(excluded) else -1, fig) for i, fig in enumerate(figs)]
+
+                for comp, fig in pairs:
+                    fname = f"sub-{sub}_ses-{ses}_ica_comp-{int(comp):03d}.png" if comp >= 0 else f"sub-{sub}_ses-{ses}_ica_comp-unk_{len(excluded):03d}.png"
+                    fig.savefig(out_dir / fname, dpi=150, bbox_inches="tight")
+                    plt.close(fig)
+
+        except Exception as err:
+            logger.warning(f"Could not save ICA excluded component topographies: {err}")
+
+
         # Apply ICA to remove artifacts if requested
         if apply:
             ica.apply(data['raw'])
@@ -1917,9 +1960,8 @@ class EEGPreprocessingPipeline:
 
         # ---------- Cleaned Epochs report ----------
         if data.get('epochs', None) is not None:
-
             epochs=data['epochs'].copy().pick(picks=picks)
-
+            
             html_report.add_epochs(
                 epochs=epochs,
                 title='Clean Epochs',
