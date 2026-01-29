@@ -130,6 +130,12 @@ def _parse_args():
         default='.vhdr',
         help='File extension to process.'
     )
+    parser.add_argument(
+        '--io-backend',
+        type=str,
+        default='read_raw_bids',
+        help='MNE IO backend function to read files (default: read_raw_bids).'
+    )
     parser.add_argument('--config', required=False, help='Path to YAML config file with preprocessing parameters.')
     parser.add_argument('--log-file', required=False, help='Path to log file. If not specified, logs will be printed to console.')
     parser.add_argument('--log-level', required=False, default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], help='Logging level (default: INFO).')
@@ -200,6 +206,7 @@ def main():
         tasks=args.tasks,
         acquisitions=args.acquisitions,
         extension=args.extension,
+        io_backend=args.io_backend
     )
 
     # Log summary of results

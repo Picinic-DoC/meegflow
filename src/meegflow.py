@@ -930,7 +930,7 @@ class MEEGFlowPipeline:
             Updated data dictionary with bad channels interpolated
         """
         instance = step_config.get('instance', 'epochs')
-        excluded_channels = step_config.get('excluded_channels', None)
+        excluded_channels = step_config.get('excluded_channels', [])
 
         if instance not in data:
             raise ValueError(f"interpolate_bad_channels step requires '{instance}' to be present in data (either 'raw' or 'epochs')")
@@ -1639,6 +1639,7 @@ class MEEGFlowPipeline:
 
         picks_params = step_config.get('picks', None)
         excluded_channels = step_config.get('excluded_channels', None)
+        outlines = step_config.get('outlines', 'head')
         compare_instances = step_config.get('compare_instances', [])
         plot_raw_kwargs = step_config.get('plot_raw_kwargs', {})
         plot_ica_kwargs = step_config.get('plot_ica_kwargs', {})
@@ -1669,7 +1670,7 @@ class MEEGFlowPipeline:
         # Create topoplot if we have bad channels and info
         if len(bad_channels) > 0:
             logger.info(f"Adding bad channels topoplot with {len(bad_channels)} bad channels")
-            fig = create_bad_channels_topoplot(inst.info, bad_channels)
+            fig = create_bad_channels_topoplot(inst.info, bad_channels, outlines=outlines)
 
             if fig is not None:
                 # Add to report
@@ -1959,7 +1960,8 @@ class MEEGFlowPipeline:
         self, 
         paths: List[Union[BIDSPath, Path]], 
         metadata: Dict[str, Any],
-        progress: Progress = None, 
+        progress: Progress = None,
+        io_backend: str = 'read_raw_bids',
         task_id: int = None
     ) -> Dict[str, Any]:
         """Process a single recording using the configured pipeline steps.
@@ -1994,14 +1996,14 @@ class MEEGFlowPipeline:
         for path in paths:
             logger.info(f"  - {path}")
 
-        # Read all files and concatenate into a single Raw object
-        # Check if paths are BIDSPath objects or regular Path objects
-        if paths and isinstance(paths[0], BIDSPath):
-            # Use read_raw_bids for BIDS paths
-            data['all_raw'] = [read_raw_bids(bids_path=bp, verbose=False) for bp in paths]
+        # Read all files
+        if io_backend == 'read_raw_bids':
+            data['all_raw'] = [read_raw_bids(bids_path=bp, verbose=True) for bp in paths]
         else:
-            # Use mne.io.read_raw for regular paths
-            data['all_raw'] = [mne.io.read_raw(str(p), preload=True, verbose=False) for p in paths]
+            read_func = getattr(mne.io, io_backend, None)
+            if read_func is None:
+                raise ValueError(f"Unknown io_backend '{io_backend}' specified")
+            data['all_raw'] = [read_func(str(p), preload=True, verbose=True) for p in paths]
 
         # Ensure data are loaded into memory for processing
         for raw in data['all_raw']:
@@ -2054,7 +2056,8 @@ class MEEGFlowPipeline:
         sessions: Union[str, List[str]] = None,
         tasks: Union[str, List[str]] = None,
         acquisitions: Union[str, List[str]] = None,
-        extension: str = '.vhdr'
+        extension: str = '.vhdr',
+        io_backend: str = 'read_raw_bids'
     ) -> Dict[str, Any]:
         """Run the pipeline using the configured reader to find files.
 
@@ -2110,7 +2113,7 @@ class MEEGFlowPipeline:
                 paths = recording['paths']
                 metadata = recording['metadata']
                 recording_name = recording['recording_name']
-                
+
                 # Get pipeline steps for this recording's progress bar
                 pipeline_steps = self._get_pipeline_steps()
                 
@@ -2119,15 +2122,16 @@ class MEEGFlowPipeline:
                     f"[cyan]{recording_name}", 
                     total=len(pipeline_steps)
                 )
-                
+
                 try:
                     results = self._process_single_recording(
                         paths=paths,
                         metadata=metadata,
-                        progress=progress, 
+                        progress=progress,
+                        io_backend=io_backend,
                         task_id=step_task_id
                     )
-                    
+
                     # Use subject from metadata if available, otherwise use first available key
                     subject_key = metadata.get('subject', list(metadata.values())[0] if metadata else 'unknown')
                     all_results.setdefault(subject_key, []).append(results)

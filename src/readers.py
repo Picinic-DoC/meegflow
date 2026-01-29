@@ -360,7 +360,7 @@ class GlobReader(DatasetReader):
             'task': tasks,
             'acquisition': acquisitions,
         }
-        
+
         for entity_name, allowed_values in criteria_map.items():
             if allowed_values is None:
                 continue
@@ -429,7 +429,7 @@ class GlobReader(DatasetReader):
                 
             # Extract variables from the file path
             variables = self._extract_variables(file_path)
-            
+
             # Filter by criteria
             if not self._filter_by_criteria(variables, subjects, sessions, tasks, acquisitions):
                 continue

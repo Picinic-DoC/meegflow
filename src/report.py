@@ -112,6 +112,7 @@ def collect_bad_channels_from_steps(preprocessing_steps: List[Dict[str, Any]]) -
 def create_bad_channels_topoplot(
     info: mne.Info,
     bad_channels: List[str],
+    outlines: Optional[Dict[str, List[int]]] = None,
     figsize: tuple = (8, 6)
 ) -> Optional[plt.Figure]:
     """
@@ -126,6 +127,8 @@ def create_bad_channels_topoplot(
         MNE Info object containing channel information and montage.
     bad_channels : list of str
         List of bad channel names to mark on the topoplot.
+    outlines : dict or None, optional
+        Dictionary defining head shape outlines. Default is None.
     figsize : tuple, optional
         Figure size (width, height) in inches. Default is (8, 6).
     
@@ -174,6 +177,7 @@ def create_bad_channels_topoplot(
         show=False,
         cmap='Greys',
         vlim=(0, 0.1),
+        outlines=outlines,
         mask=mask,
         mask_params=dict(
             marker='x',
