@@ -7,7 +7,7 @@ This document describes the implementation of the custom preprocessing steps fea
 
 ### Core Changes
 
-#### 1. Pipeline Module (`src/eeg_preprocessing_pipeline.py`)
+#### 1. Pipeline Module (`src/meegflow.py`)
 
 **New Imports:**
 - `importlib.util` - For dynamic module loading
@@ -16,7 +16,7 @@ This document describes the implementation of the custom preprocessing steps fea
 - Updated `Callable` type hint import
 
 **New Method: `_load_custom_steps()`**
-- Location: After `__init__` method in `EEGPreprocessingPipeline` class
+- Location: After `__init__` method in `MEEGFlowPipeline` class
 - Purpose: Discovers and loads custom step functions from a specified folder
 - Parameters:
   - `custom_steps_folder`: Path to folder containing Python files with custom steps
@@ -125,7 +125,7 @@ pipeline:
 
 3. Run pipeline normally:
 ```bash
-eeg-preprocess --bids-root /data --config config.yaml
+meegflow --bids-root /data --config config.yaml
 ```
 
 ### Docker Usage
@@ -206,7 +206,7 @@ This feature is fully backward compatible:
 ## Files Modified/Added
 
 ### Modified:
-- `src/eeg_preprocessing_pipeline.py` - Added custom step loading functionality
+- `src/meegflow.py` - Added custom step loading functionality
 - `README.md` - Added comprehensive documentation
 
 ### Added:

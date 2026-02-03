@@ -7,7 +7,7 @@ The `_step_find_flat_channels` method has been thoroughly reviewed and tested. *
 
 ## Method Overview
 
-**Location**: `src/eeg_preprocessing_pipeline.py`, lines 594-626
+**Location**: `src/meegflow.py`, lines 594-626
 
 **Purpose**: Identifies flat EEG channels based on variance threshold and marks them as bad channels.
 
