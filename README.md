@@ -1,11 +1,11 @@
-# NICE EEG Preprocessing Pipeline
+# MEEGFlow: MEEG Preprocessing Pipeline
 
-A modular, configuration-driven EEG preprocessing pipeline using MNE-BIDS. The pipeline uses auxiliary functions for each preprocessing step, allowing you to choose which steps to run, their order, and their parameters through a simple YAML configuration.
+A modular, configuration-driven MEEG preprocessing pipeline using MNE-BIDS. The pipeline uses auxiliary functions for each preprocessing step, allowing you to choose which steps to run, their order, and their parameters through a simple YAML configuration.
 
 ## Features
 
 - **Flexible File Discovery**: Support for both BIDS-formatted datasets and custom glob patterns
-- **MNE-BIDS Integration**: Seamlessly reads EEG data in BIDS format
+- **MNE-BIDS Integration**: Seamlessly reads MEEG data in BIDS format
 - **Modular Design**: Each preprocessing step is a separate function
 - **Configuration-Driven**: Choose steps, their order, and parameters via YAML
 - **Custom Steps Support**: Extend the pipeline with your own preprocessing functions
@@ -27,14 +27,14 @@ Using Docker is the easiest way to get started, as it includes all dependencies 
 
 1. Build the Docker image:
 ```bash
-git clone https://github.com/Laouen/nice-preprocessing.git
-cd nice-preprocessing
-docker build -t nice-preprocessing .
+git clone https://github.com/Laouen/meegflow.git
+cd meegflow
+docker build -t meegflow .
 ```
 
 2. Run the container:
 ```bash
-docker run --rm -v /path/to/bids/data:/data nice-preprocessing \
+docker run --rm -v /path/to/bids/data:/data meegflow \
     --bids-root /data \
     --subjects 01 02 \
     --tasks rest \
@@ -45,8 +45,8 @@ docker run --rm -v /path/to/bids/data:/data nice-preprocessing \
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/Laouen/nice-preprocessing.git
-cd nice-preprocessing
+git clone https://github.com/Laouen/meegflow.git
+cd meegflow
 ```
 
 2. Install dependencies:
@@ -54,7 +54,7 @@ cd nice-preprocessing
 pip install -r requirements.txt
 ```
 
-3. (Optional) Install the package to use the `eeg-preprocess` command:
+3. (Optional) Install the package to use the `meegflow` command:
 ```bash
 pip install -e .
 ```
@@ -63,13 +63,13 @@ pip install -e .
 
 ### Using Docker
 
-To use the Docker image, mount your BIDS dataset directory to `/data` in the container. The outputs will be written to the `derivatives/nice_preprocessing` subdirectory within your BIDS root.
+To use the Docker image, mount your BIDS dataset directory to `/data` in the container. The outputs will be written to the `derivatives/meegflow` subdirectory within your BIDS root.
 
 **Basic usage:**
 ```bash
 docker run --rm \
     -v /path/to/bids:/data \
-    nice-preprocessing \
+    meegflow \
     --bids-root /data \
     --tasks rest
 ```
@@ -79,7 +79,7 @@ docker run --rm \
 docker run --rm \
     -v /path/to/bids:/data \
     -v /path/to/custom/config.yaml:/config.yaml \
-    nice-preprocessing \
+    meegflow \
     --bids-root /data \
     --subjects 01 02 03 \
     --tasks rest \
@@ -91,7 +91,7 @@ docker run --rm \
 docker run --rm \
     -v /path/to/bids:/data \
     -v /path/to/logs:/logs \
-    nice-preprocessing \
+    meegflow \
     --bids-root /data \
     --tasks rest \
     --log-file /logs/pipeline.log
@@ -101,7 +101,7 @@ docker run --rm \
 ```bash
 docker run --rm \
     -v /path/to/bids:/data \
-    nice-preprocessing \
+    meegflow \
     --bids-root /data \
     --subjects 01 02 \
     --sessions 01 02 \
@@ -122,10 +122,10 @@ python src/cli.py \
     --config configs/config_example.yaml
 ```
 
-If you installed the package with `pip install -e .`, you can use the `eeg-preprocess` command:
+If you installed the package with `pip install -e .`, you can use the `meegflow` command:
 
 ```bash
-eeg-preprocess \
+meegflow \
     --bids-root /path/to/bids/dataset \
     --subjects 01 02 03 \
     --tasks rest \
@@ -156,7 +156,7 @@ You can also use the pipeline directly in Python:
 ```python
 import sys
 sys.path.insert(0, 'src')
-from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+from meegflow import MEEGFlowPipeline
 from readers import BIDSReader
 
 # Load configuration
@@ -168,7 +168,7 @@ with open('configs/config_example.yaml', 'r') as f:
 reader = BIDSReader('/path/to/bids/dataset')
 
 # Initialize pipeline
-pipeline = EEGPreprocessingPipeline(
+pipeline = MEEGFlowPipeline(
     reader=reader,
     output_root='/path/to/derivatives',
     config=config
@@ -232,7 +232,7 @@ reader = GlobReader(
 )
 
 # Initialize pipeline with the glob reader
-pipeline = EEGPreprocessingPipeline(
+pipeline = MEEGFlowPipeline(
     reader=reader,
     config=config
 )
@@ -248,7 +248,7 @@ For detailed information on readers, pattern examples, and troubleshooting, see 
 The pipeline creates outputs in a BIDS-derivatives structure:
 
 ```
-derivatives/nice_preprocessing/
+derivatives/meegflow/
 ├── epochs/              # When saving epochs with save_clean_instance
 │   └── sub-01/
 │       └── eeg/
@@ -483,7 +483,7 @@ These arguments use the same matching logic as `mne-bids` `find_matching_paths`.
 - `--extension`: File extension to process (default: `.vhdr`)
 
 ### Other Arguments
-- `--output-root`: Custom output path (optional, defaults to `bids-root/derivatives/nice-preprocessing`)
+- `--output-root`: Custom output path (optional, defaults to `bids-root/derivatives/meegflow`)
 - `--config`: Path to YAML configuration file (optional)
 - `--log-file`: Path to log file (optional, defaults to console output)
 - `--log-level`: Logging level - DEBUG, INFO, WARNING, or ERROR (optional, default: INFO)
@@ -555,7 +555,7 @@ Mount your custom steps folder when running the container:
 docker run -v /host/bids:/data \
            -v /host/custom_steps:/custom_steps \
            -v /host/config:/config \
-           nice-preprocessing \
+           meegflow \
            --bids-root /data \
            --subjects 01 02 \
            --tasks rest \
@@ -903,7 +903,7 @@ python src/cli.py \
 
 Available log levels: `DEBUG`, `INFO` (default), `WARNING`, `ERROR`
 
-The pipeline also saves a summary of results to `derivatives/nice_preprocessing/pipeline_results.json` for easy programmatic access.
+The pipeline also saves a summary of results to `derivatives/meegflow/pipeline_results.json` for easy programmatic access.
 
 ## Docker Notes
 
@@ -913,7 +913,7 @@ When using Docker, you need to mount your local directories to paths inside the 
 
 - **BIDS dataset**: Mount your BIDS root directory to `/data` or any path you specify with `--bids-root`
 - **Configuration files**: Mount custom config files if not using the built-in configs in `/app/configs/`
-- **Output directory**: The pipeline writes outputs to `<bids-root>/derivatives/nice_preprocessing/` by default
+- **Output directory**: The pipeline writes outputs to `<bids-root>/derivatives/meegflow/` by default
 - **Log files**: If using `--log-file`, mount a directory for log output
 
 ### File Permissions
@@ -924,7 +924,7 @@ The Docker container runs as root by default. Files created by the container wil
 ```bash
 docker run --rm --user $(id -u):$(id -g) \
     -v /path/to/bids:/data \
-    nice-preprocessing \
+    meegflow \
     --bids-root /data \
     --tasks rest
 ```
@@ -949,7 +949,7 @@ Example using a built-in config:
 ```bash
 docker run --rm \
     -v /path/to/bids:/data \
-    nice-preprocessing \
+    meegflow \
     --bids-root /data \
     --tasks rest \
     --config /app/configs/config_with_adaptive_reject.yaml
@@ -960,9 +960,9 @@ docker run --rm \
 If you want to customize the Docker image or use a development version:
 
 ```bash
-git clone https://github.com/Laouen/nice-preprocessing.git
-cd nice-preprocessing
-docker build -t nice-preprocessing:custom .
+git clone https://github.com/Laouen/meegflow.git
+cd meegflow
+docker build -t meegflow:custom .
 ```
 
 **Building in CI/CD environments with self-signed certificates:**
@@ -970,7 +970,7 @@ docker build -t nice-preprocessing:custom .
 If you're building in a CI/CD environment with self-signed SSL certificates, use the `PIP_TRUSTED_HOST` build argument:
 
 ```bash
-docker build --build-arg PIP_TRUSTED_HOST=1 -t nice-preprocessing:custom .
+docker build --build-arg PIP_TRUSTED_HOST=1 -t meegflow:custom .
 ```
 
 Note: This disables SSL verification for PyPI and should only be used in trusted CI/CD environments, not for production builds.
