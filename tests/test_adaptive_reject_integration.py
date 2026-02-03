@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for adaptive autoreject integration in EEG preprocessing pipeline.
+Tests for adaptive autoreject integration in MEEG preprocessing pipeline.
 
 These are structural tests that verify the integration without requiring MNE.
 """
@@ -14,7 +14,7 @@ from pathlib import Path
 
 def test_adaptive_reject_import():
     """Test that adaptive_reject is imported in the pipeline."""
-    pipeline_file = Path("src/eeg_preprocessing_pipeline.py")
+    pipeline_file = Path("src/meegflow.py")
     assert pipeline_file.exists(), "Pipeline file does not exist"
     
     with open(pipeline_file, 'r') as f:
@@ -26,7 +26,7 @@ def test_adaptive_reject_import():
 
 def test_step_functions_registered():
     """Test that all adaptive autoreject step functions are registered."""
-    pipeline_file = Path("src/eeg_preprocessing_pipeline.py")
+    pipeline_file = Path("src/meegflow.py")
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -46,7 +46,7 @@ def test_step_functions_registered():
 
 def test_step_methods_defined():
     """Test that all adaptive autoreject step methods are defined."""
-    pipeline_file = Path("src/eeg_preprocessing_pipeline.py")
+    pipeline_file = Path("src/meegflow.py")
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -66,7 +66,7 @@ def test_step_methods_defined():
 
 def test_step_methods_call_adaptive_reject():
     """Test that step methods call the corresponding adaptive_reject functions."""
-    pipeline_file = Path("src/eeg_preprocessing_pipeline.py")
+    pipeline_file = Path("src/meegflow.py")
     with open(pipeline_file, 'r') as f:
         code = f.read()
     

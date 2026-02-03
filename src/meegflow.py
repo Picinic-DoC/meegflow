@@ -1877,12 +1877,12 @@ class MEEGFlowPipeline:
 
             axes[0].plot(times, gfp_b, color='red', alpha=0.35, label=inst_b_label)
             axes[0].plot(times, gfp_a, color='black', linewidth=1.0, label=inst_a_label)
-            axes[0].set_title('MEEG Global Field Power (full recording)')
+            axes[0].set_title('Global Field Power (full recording)')
             axes[0].legend(loc='upper right')
 
             axes[1].plot(times, mean_b, color='red', alpha=0.35, label=inst_b_label)
             axes[1].plot(times, mean_a, color='black', linewidth=1.0, label=inst_a_label)
-            axes[1].set_title('Mean MEEG across channels (full recording)')
+            axes[1].set_title('Mean across channels (full recording)')
             axes[0].legend(loc='upper right')
 
             axes[2].plot(times, diff_abs, color='purple', linewidth=1.0)
