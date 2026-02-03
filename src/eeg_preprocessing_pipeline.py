@@ -1236,7 +1236,7 @@ class EEGPreprocessingPipeline:
                 ses = str(data.get("session", "unknown"))
 
                 out_dir = (
-                    self.bids_root
+                    self.dataset_root
                     / "derivatives"
                     / "nice_preprocessing"
                     / "ica_topos"
