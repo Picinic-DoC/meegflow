@@ -134,7 +134,7 @@ eeg-preprocess --bids-root /data --config config.yaml
 docker run -v /host/data:/data \
            -v /host/custom_steps:/custom_steps \
            -v /host/config:/config \
-           nice-preprocessing \
+           meegflow \
            --bids-root /data \
            --config /config/my_config.yaml
 ```

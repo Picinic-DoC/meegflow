@@ -1,7 +1,7 @@
 # Excluded Channels Feature Implementation Summary
 
 ## Overview
-This implementation adds an `excluded_channels` parameter to preprocessing steps in the nice-preprocessing pipeline, allowing users to exclude specific channels (like reference channels such as 'Cz') from analysis to avoid reference problems.
+This implementation adds an `excluded_channels` parameter to preprocessing steps in the meegflow pipeline, allowing users to exclude specific channels (like reference channels such as 'Cz') from analysis to avoid reference problems.
 
 ## Issue Requirements
 - **Issue Title**: "Ignore Cz from initial preprocessing to avoid reference problems"

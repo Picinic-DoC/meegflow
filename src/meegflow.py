@@ -124,7 +124,7 @@ class MEEGFlowPipeline:
             or GlobReader for custom directory structures.
         output_root : str or Path, optional
             Path to output derivatives root. If not provided, defaults to
-            {dataset_root}/derivatives/nice_preprocessing
+            {dataset_root}/derivatives/meegflow
         config : dict, optional
             Configuration dictionary containing pipeline steps and parameters
         """
@@ -192,7 +192,7 @@ class MEEGFlowPipeline:
         Parameters
         ----------
         subdir : str, optional
-            Subdirectory within derivatives/nice_preprocessing
+            Subdirectory within derivatives/meegflow
             
         Returns
         -------
@@ -202,7 +202,7 @@ class MEEGFlowPipeline:
         if self.output_root:
             base = self.output_root
         else:
-            base = self.dataset_root / "derivatives" / "nice_preprocessing"
+            base = self.dataset_root / "derivatives" / "meegflow"
         
         if subdir:
             return base / subdir

@@ -1,6 +1,6 @@
 # Reader System Documentation
 
-The nice-preprocessing pipeline now supports two types of file readers:
+The meegflow pipeline now supports two types of file readers:
 
 1. **BIDSReader** - For BIDS-formatted datasets (default)
 2. **GlobReader** - For custom directory structures using glob patterns with variable extraction

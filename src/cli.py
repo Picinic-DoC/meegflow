@@ -53,7 +53,7 @@ Optional filters (if not specified, all matching files are processed):
   --extension         File extension (default: .vhdr)
 
 Other options:
-  --output-root       Custom output path (default: bids-root/derivatives/nice-preprocessing)
+  --output-root       Custom output path (default: bids-root/derivatives/meegflow)
   --config            Path to YAML configuration file
   --log-file          Path to log file (default: console output)
   --log-level         Logging level: DEBUG, INFO, WARNING, ERROR (default: INFO)
@@ -229,7 +229,7 @@ def main():
                 logger.info(f"  - Task: {task}, Session: {session}, Epochs: {n_epochs}")
     
     # Also write results to JSON file for easy processing
-    output_json = Path(pipeline.dataset_root) / "derivatives" / "nice_preprocessing" / "pipeline_results.json"
+    output_json = Path(pipeline.dataset_root) / "derivatives" / "meegflow" / "pipeline_results.json"
     output_json.parent.mkdir(parents=True, exist_ok=True)
     with open(output_json, 'w') as f:
         json.dump(results, f, indent=2, cls=NpEncoder)
