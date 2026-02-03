@@ -3,7 +3,7 @@
 Tests for verifying the separation of CLI and API.
 
 This test verifies that:
-1. The EEGPreprocessingPipeline class can be imported for API usage
+1. The MEEGFlowPipeline class can be imported for API usage
 2. The CLI module exists and has the correct structure
 3. The CLI and API are properly separated
 """
@@ -50,19 +50,19 @@ def test_cli_has_arg_parser():
 
 
 def test_cli_imports_pipeline():
-    """Test that the CLI imports the EEGPreprocessingPipeline."""
+    """Test that the CLI imports the MEEGFlowPipeline."""
     cli_file = src_dir / "cli.py"
     with open(cli_file, 'r') as f:
         code = f.read()
     
-    assert "from eeg_preprocessing_pipeline import EEGPreprocessingPipeline" in code, \
-        "CLI does not import EEGPreprocessingPipeline"
-    print("✓ CLI imports EEGPreprocessingPipeline")
+    assert "from meegflow import MEEGFlowPipeline" in code, \
+        "CLI does not import MEEGFlowPipeline"
+    print("✓ CLI imports MEEGFlowPipeline")
 
 
 def test_pipeline_has_no_cli_code():
     """Test that the pipeline file does not contain CLI code."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -79,13 +79,13 @@ def test_pipeline_has_no_cli_code():
 
 
 def test_pipeline_has_class():
-    """Test that the pipeline file still has the EEGPreprocessingPipeline class."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    """Test that the pipeline file still has the MEEGFlowPipeline class."""
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
-    assert "class EEGPreprocessingPipeline" in code, "EEGPreprocessingPipeline class not found"
-    print("✓ Pipeline file has EEGPreprocessingPipeline class")
+    assert "class MEEGFlowPipeline" in code, "MEEGFlowPipeline class not found"
+    print("✓ Pipeline file has MEEGFlowPipeline class")
 
 
 def test_setup_file_exists():
@@ -109,14 +109,14 @@ def test_setup_has_entry_point():
 
 def test_api_import_structure():
     """Test that the API import structure is correct."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     
     with open(pipeline_file, 'r') as f:
         tree = ast.parse(f.read())
     
-    # Check that EEGPreprocessingPipeline class exists
+    # Check that MEEGFlowPipeline class exists
     classes = [node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
-    assert 'EEGPreprocessingPipeline' in classes, "EEGPreprocessingPipeline class not found in AST"
+    assert 'MEEGFlowPipeline' in classes, "MEEGFlowPipeline class not found in AST"
     
     # Check that run_pipeline method exists
     methods = [node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]

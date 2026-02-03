@@ -1,7 +1,7 @@
 
 #B+
 
-eeg-preprocess \
+meegflow \
 --bids-root /network/iss/cenir/analyse/meeg/LIBERATE/02_BIDS \
 --config ./configs/config_minimal.yaml \
 --subjects 003 023 052 077 101 110 159 168 172 191 211 226 254 296 354 \
@@ -10,7 +10,7 @@ eeg-preprocess \
 
 #controls
 
-eeg-preprocess \
+meegflow \
 --bids-root /network/iss/cenir/analyse/meeg/LIBERATE/02_BIDS \
 --config ./configs/config_minimal.yaml \
 --subjects 011 029 058 081 107 118 150 163 177 215 235 250 267 298 369 \
@@ -20,7 +20,7 @@ eeg-preprocess \
 
 #progressors
 
-eeg-preprocess \
+meegflow \
 --bids-root /network/iss/cenir/analyse/meeg/LIBERATE/02_BIDS \
 --config ./configs/config_minimal.yaml \
 --subjects 050 086 094 102 113 120 175 183 216 240 256 284 300 326 355 \
@@ -41,7 +41,7 @@ import numpy as np
 
 epochs = mne.read_epochs(
     "/network/iss/cenir/analyse/meeg/LIBERATE/02_BIDS/derivatives/"
-    "nice_preprocessing/epochs/sub-334/ses-M0/eeg/"
+    "meegflow/epochs/sub-334/ses-M0/eeg/"
     "sub-334_ses-M0_task-FCSRT_proc-clean_desc-cleaned_epo.fif",
     preload=True,
 )
@@ -64,6 +64,6 @@ raw = read_raw_bids(bids_root='network/iss/cenir/analyse/meeg/LIBERATE/02_BIDS',
 
 # save it 
 
-raw.save('/network/iss/home/kenza.bennis/Documents/insight/nice-preprocessing/sub-01_ses-01_task-rest_run-01_raw.fif', overwrite=True)
+raw.save('/network/iss/home/kenza.bennis/Documents/insight/meegflow/sub-01_ses-01_task-rest_run-01_raw.fif', overwrite=True)
 
-/network/iss/home/kenza.bennis/Documents/insight/nice-preprocessing/sub-01_ses-01_task-rest_run-01_raw.fif
+/network/iss/home/kenza.bennis/Documents/insight/meegflow/sub-01_ses-01_task-rest_run-01_raw.fif

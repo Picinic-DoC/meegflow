@@ -19,7 +19,7 @@ src_dir = repo_root / "src"
 def test_pipeline_has_load_custom_steps_method():
     """Test that the pipeline has the _load_custom_steps method."""
     print("Testing: _load_custom_steps method exists...")
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -30,7 +30,7 @@ def test_pipeline_has_load_custom_steps_method():
 def test_pipeline_imports_required_modules():
     """Test that the pipeline imports required modules for custom steps."""
     print("Testing: required imports for custom steps...")
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -42,7 +42,7 @@ def test_pipeline_imports_required_modules():
 def test_custom_steps_folder_config_used():
     """Test that custom_steps_folder config is used in __init__."""
     print("Testing: custom_steps_folder config is used...")
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -54,7 +54,7 @@ def test_custom_steps_folder_config_used():
 def test_load_custom_steps_signature():
     """Test that _load_custom_steps has the correct signature."""
     print("Testing: _load_custom_steps signature...")
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
         tree = ast.parse(code)
@@ -79,7 +79,7 @@ def test_load_custom_steps_signature():
 def test_load_custom_steps_returns_dict():
     """Test that _load_custom_steps returns a dict."""
     print("Testing: _load_custom_steps return type...")
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -91,7 +91,7 @@ def test_load_custom_steps_returns_dict():
 def test_custom_steps_docstring_exists():
     """Test that _load_custom_steps has comprehensive documentation."""
     print("Testing: _load_custom_steps has documentation...")
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
         tree = ast.parse(code)
@@ -114,7 +114,7 @@ def test_custom_steps_docstring_exists():
 def test_error_handling_for_missing_folder():
     """Test that error handling is implemented for missing folder."""
     print("Testing: error handling for missing folder...")
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -128,7 +128,7 @@ def test_error_handling_for_missing_folder():
 def test_glob_for_python_files():
     """Test that the code searches for .py files."""
     print("Testing: searching for .py files...")
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -141,7 +141,7 @@ def test_glob_for_python_files():
 def test_skips_underscore_files():
     """Test that the code skips files starting with underscore."""
     print("Testing: skipping underscore files...")
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -153,7 +153,7 @@ def test_skips_underscore_files():
 def test_function_signature_validation():
     """Test that the code validates function signatures."""
     print("Testing: function signature validation...")
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -166,7 +166,7 @@ def test_function_signature_validation():
 def test_step_functions_update():
     """Test that custom steps are added to step_functions dict."""
     print("Testing: custom steps added to step_functions...")
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -178,7 +178,7 @@ def test_step_functions_update():
 def test_logging_messages():
     """Test that appropriate logging messages are present."""
     print("Testing: logging messages...")
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -190,7 +190,7 @@ def test_logging_messages():
 def test_module_loading():
     """Test that the code uses importlib to load modules."""
     print("Testing: module loading with importlib...")
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -204,7 +204,7 @@ def test_module_loading():
 def test_error_handling_for_invalid_files():
     """Test that errors in loading individual files don't crash the process."""
     print("Testing: error handling for invalid files...")
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     

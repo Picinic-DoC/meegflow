@@ -27,7 +27,7 @@ Created a new module containing:
   - Automatically extracts metadata from file paths
   - Handles duplicate variable names with backreferences
 
-### 2. Updated `EEGPreprocessingPipeline`
+### 2. Updated `MEEGFlowPipeline`
 
 **Constructor Changes:**
 ```python
@@ -92,7 +92,7 @@ def __init__(
 **Updated Documentation:**
 - `README.md` - Added readers section
 - `src/cli.py` - Updated docstrings
-- `src/eeg_preprocessing_pipeline.py` - Updated docstrings
+- `src/meegflow.py` - Updated docstrings
 
 ## Usage Examples
 
@@ -103,7 +103,7 @@ def __init__(
 python src/cli.py --bids-root /path/to/bids --tasks rest
 
 # Python API (unchanged from before)
-pipeline = EEGPreprocessingPipeline(bids_root='/path/to/bids', config=config)
+pipeline = MEEGFlowPipeline(bids_root='/path/to/bids', config=config)
 results = pipeline.run_pipeline(subjects=['01'], tasks='rest')
 ```
 
@@ -125,7 +125,7 @@ reader = GlobReader(
     data_root='/path/to/data',
     pattern='sub-{subject}/ses-{session}/eeg/sub-{subject}_task-{task}_eeg.vhdr'
 )
-pipeline = EEGPreprocessingPipeline(
+pipeline = MEEGFlowPipeline(
     bids_root='/path/to/data',
     config=config,
     reader=reader
@@ -242,7 +242,7 @@ Possible future additions:
 - `IMPLEMENTATION_READERS.md` (this file)
 
 **Modified:**
-- `src/eeg_preprocessing_pipeline.py` (+130 lines, -60 lines)
+- `src/meegflow.py` (+130 lines, -60 lines)
 - `src/cli.py` (+70 lines, -20 lines)
 - `README.md` (+60 lines)
 

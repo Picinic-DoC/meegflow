@@ -19,7 +19,7 @@ def test_excluded_channels_integration():
     try:
         import numpy as np
         import mne
-        from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+        from meegflow import MEEGFlowPipeline
         
         # Create mock raw data
         n_channels = 5
@@ -37,7 +37,7 @@ def test_excluded_channels_integration():
         from readers import BIDSReader
         config = {'pipeline': []}
         reader = BIDSReader(repo_root / "test_data")
-        pipeline = EEGPreprocessingPipeline(
+        pipeline = MEEGFlowPipeline(
             reader=reader,
             config=config
         )

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-EEG Preprocessing Pipeline using MNE-BIDS.
+MEEGFlow: MEEG Preprocessing Pipeline using MNE-BIDS.
 
-This module provides a modular, configuration-driven EEG preprocessing pipeline.
+This module provides a modular, configuration-driven MEEG preprocessing pipeline.
 Each preprocessing step is a separate method that can be customized and combined
 through a YAML configuration file.
 
 Main Components
 ---------------
-- EEGPreprocessingPipeline: Core pipeline class
-  - Processes EEG data from BIDS datasets
+- MEEGFlowPipeline: Core pipeline class
+  - Processes MEEG data from BIDS datasets
   - Executes configurable preprocessing steps
   - Generates JSON and HTML reports
   - Supports batch processing of multiple subjects/sessions
@@ -60,7 +60,7 @@ Output:
 Usage Example
 -------------
 ```python
-from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+from meegflow import MEEGFlowPipeline
 import yaml
 
 # Load configuration
@@ -68,7 +68,7 @@ with open('config.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
 # Initialize and run pipeline
-pipeline = EEGPreprocessingPipeline(
+pipeline = MEEGFlowPipeline(
     bids_root='/path/to/bids',
     config=config
 )
@@ -108,14 +108,14 @@ from readers import BIDSReader
 if TYPE_CHECKING:
     from readers import DatasetReader
 
-class EEGPreprocessingPipeline:
+class MEEGFlowPipeline:
     def __init__(
         self, 
         reader: DatasetReader,
         output_root: Union[str, Path] = None, 
         config: Dict[str, Any] = None
     ):
-        """Initialize EEG preprocessing pipeline.
+        """Initialize MEEGFlow preprocessing pipeline.
         
         Parameters
         ----------
@@ -124,7 +124,7 @@ class EEGPreprocessingPipeline:
             or GlobReader for custom directory structures.
         output_root : str or Path, optional
             Path to output derivatives root. If not provided, defaults to
-            {dataset_root}/derivatives/nice_preprocessing
+            {dataset_root}/derivatives/meegflow
         config : dict, optional
             Configuration dictionary containing pipeline steps and parameters
         """
@@ -192,7 +192,7 @@ class EEGPreprocessingPipeline:
         Parameters
         ----------
         subdir : str, optional
-            Subdirectory within derivatives/nice_preprocessing
+            Subdirectory within derivatives/meegflow
             
         Returns
         -------
@@ -202,7 +202,7 @@ class EEGPreprocessingPipeline:
         if self.output_root:
             base = self.output_root
         else:
-            base = self.dataset_root / "derivatives" / "nice_preprocessing"
+            base = self.dataset_root / "derivatives" / "meegflow"
         
         if subdir:
             return base / subdir
@@ -603,7 +603,7 @@ class EEGPreprocessingPipeline:
 
     def _step_set_montage(self, data: Dict[str, Any], step_config: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Set channel montage for EEG data.
+        Set channel montage for MEEG data.
         
         Useful when data lacks electrode position information. Sets standard electrode
         positions based on the specified montage.
@@ -701,7 +701,7 @@ class EEGPreprocessingPipeline:
         h_freq_order : int, optional
             Filter order for low-pass filter (default: 8)
         picks : list, optional
-            Channel types to filter (e.g., ['eeg']). If None, defaults to EEG channels.
+            Channel types to filter (e.g., ['eeg']). If None, defaults to MEEG channels.
         excluded_channels : list of str, optional
             Channel names to exclude from filtering (e.g., reference channels)
         n_jobs : int, optional
@@ -794,7 +794,7 @@ class EEGPreprocessingPipeline:
         method : str, optional
             Filtering method (default: 'fft')
         picks : list, optional
-            Channel types to filter. If None, defaults to EEG channels.
+            Channel types to filter. If None, defaults to MEEG channels.
         excluded_channels : list of str, optional
             Channel names to exclude from filtering
         n_jobs : int, optional
@@ -1026,7 +1026,7 @@ class EEGPreprocessingPipeline:
         random_state : int, optional
             Random state for reproducibility (default: 97)
         picks : list, optional
-            Channel types to include in ICA. If None, defaults to EEG channels.
+            Channel types to include in ICA. If None, defaults to MEEG channels.
         excluded_channels : list of str, optional
             Channel names to exclude from ICA decomposition
         find_eog : bool, optional
@@ -1077,7 +1077,7 @@ class EEGPreprocessingPipeline:
 
         raw = data['raw'].copy().filter(l_freq=ica_l_freq, h_freq=ica_h_freq)
 
-        # --- Fit ICA on EEG only (your _get_picks already defaults to eeg=True, eog=False) ---
+        # --- Fit ICA on MEEG only (your _get_picks already defaults to eeg=True, eog=False) ---
         ica = mne.preprocessing.ICA(
             n_components=n_components,
             random_state=random_state,
@@ -1333,7 +1333,7 @@ class EEGPreprocessingPipeline:
         Parameters (via step_config)
         -----------------------------
         picks : list, optional
-            Channel types to analyze (default: all EEG channels)
+            Channel types to analyze (default: all MEEG channels)
         excluded_channels : list, optional
             Channel names to exclude from analysis (e.g., reference channels)
         threshold : float, optional
@@ -1877,12 +1877,12 @@ class EEGPreprocessingPipeline:
 
             axes[0].plot(times, gfp_b, color='red', alpha=0.35, label=inst_b_label)
             axes[0].plot(times, gfp_a, color='black', linewidth=1.0, label=inst_a_label)
-            axes[0].set_title('EEG Global Field Power (full recording)')
+            axes[0].set_title('Global Field Power (full recording)')
             axes[0].legend(loc='upper right')
 
             axes[1].plot(times, mean_b, color='red', alpha=0.35, label=inst_b_label)
             axes[1].plot(times, mean_a, color='black', linewidth=1.0, label=inst_a_label)
-            axes[1].set_title('Mean EEG across channels (full recording)')
+            axes[1].set_title('Mean across channels (full recording)')
             axes[0].legend(loc='upper right')
 
             axes[2].plot(times, diff_abs, color='purple', linewidth=1.0)

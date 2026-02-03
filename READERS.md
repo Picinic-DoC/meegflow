@@ -1,6 +1,6 @@
 # Reader System Documentation
 
-The nice-preprocessing pipeline now supports two types of file readers:
+The meegflow pipeline now supports two types of file readers:
 
 1. **BIDSReader** - For BIDS-formatted datasets (default)
 2. **GlobReader** - For custom directory structures using glob patterns with variable extraction
@@ -21,21 +21,21 @@ python src/cli.py --reader bids --bids-root /path/to/bids --tasks rest
 # With subject/task filtering
 python src/cli.py --bids-root /path/to/bids --subjects 01 02 --tasks rest
 
-# Using the eeg-preprocess command (after pip install -e .)
-eeg-preprocess --bids-root /path/to/bids --config config.yaml
+# Using the meegflow command (after pip install -e .)
+meegflow --bids-root /path/to/bids --config config.yaml
 ```
 
 ### Programmatic Usage
 
 ```python
-from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+from meegflow import MEEGFlowPipeline
 from readers import BIDSReader
 
 # Create a BIDS reader
 reader = BIDSReader('/path/to/bids')
 
 # Initialize pipeline with the reader
-pipeline = EEGPreprocessingPipeline(
+pipeline = MEEGFlowPipeline(
     reader=reader,
     config=config
 )
@@ -96,7 +96,7 @@ python src/cli.py \
 ### Programmatic Usage
 
 ```python
-from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+from meegflow import MEEGFlowPipeline
 from readers import GlobReader
 
 # Create a glob reader with your custom pattern
@@ -106,7 +106,7 @@ reader = GlobReader(
 )
 
 # Initialize the pipeline with the glob reader
-pipeline = EEGPreprocessingPipeline(
+pipeline = MEEGFlowPipeline(
     reader=reader,
     config=config
 )
@@ -204,16 +204,16 @@ pattern = "sub-{subject}/sub-{subject}_task-{task}_eeg.vhdr"
 
 ## Migration from Legacy Code
 
-If you have existing code using `EEGPreprocessingPipeline`, you need to update it to pass a reader:
+If you have existing code using `MEEGFlowPipeline`, you need to update it to pass a reader:
 
 ```python
 # Old code (no longer works)
-# pipeline = EEGPreprocessingPipeline(bids_root='/path/to/bids', config=config)
+# pipeline = MEEGFlowPipeline(bids_root='/path/to/bids', config=config)
 
 # New code - create a reader first
 from readers import BIDSReader
 reader = BIDSReader('/path/to/bids')
-pipeline = EEGPreprocessingPipeline(reader=reader, config=config)
+pipeline = MEEGFlowPipeline(reader=reader, config=config)
 results = pipeline.run_pipeline(subjects=['01'], tasks='rest')
 ```
 
@@ -223,7 +223,7 @@ To use glob reader instead, simply create a GlobReader and pass it:
 from readers import GlobReader
 
 reader = GlobReader('/path/to/data', 'your/pattern/here/{subject}_{task}.vhdr')
-pipeline = EEGPreprocessingPipeline(
+pipeline = MEEGFlowPipeline(
     reader=reader,
     config=config
 )

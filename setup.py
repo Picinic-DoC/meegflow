@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Setup script for the NICE EEG Preprocessing Pipeline."""
+"""Setup script for MEEGFlow."""
 
 from setuptools import setup, find_packages
 from pathlib import Path
@@ -16,12 +16,12 @@ if requirements_file.exists():
         requirements = [line.strip() for line in f if line.strip() and not line.startswith('#')]
 
 setup(
-    name="nice-preprocessing",
+    name="meegflow",
     version="0.1.0",
-    description="A modular, configuration-driven EEG preprocessing pipeline using MNE-BIDS",
+    description="A modular, configuration-driven MEEG preprocessing pipeline using MNE-BIDS",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    author="NICE EEG Preprocessing Team",
+    author="MEEGFlow Team",
     url="https://github.com/Laouen/nice-preprocessing",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
@@ -29,7 +29,7 @@ setup(
     python_requires=">=3.8",
     entry_points={
         "console_scripts": [
-            "eeg-preprocess=cli:main",
+            "meegflow=cli:main",
         ],
     },
     classifiers=[

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for excluded_channels feature in the EEG preprocessing pipeline.
+Tests for excluded_channels feature in the MEEG preprocessing pipeline.
 
 This test file validates that the excluded_channels parameter works correctly
 across all steps that support it, allowing channels (like Cz) to be excluded
@@ -18,7 +18,7 @@ src_dir = repo_root / "src"
 
 def test_apply_excluded_channels_exists():
     """Test that the _apply_excluded_channels helper function exists."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -28,7 +28,7 @@ def test_apply_excluded_channels_exists():
 
 def test_get_picks_has_excluded_channels_param():
     """Test that _get_picks has excluded_channels parameter."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -47,7 +47,7 @@ def test_get_picks_has_excluded_channels_param():
 
 def test_steps_support_excluded_channels():
     """Test that appropriate steps support excluded_channels parameter."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -88,7 +88,7 @@ def test_steps_support_excluded_channels():
 
 def test_steps_pass_excluded_channels_to_get_picks():
     """Test that steps pass excluded_channels to _get_picks."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -134,7 +134,7 @@ def test_steps_pass_excluded_channels_to_get_picks():
 
 def test_preprocessing_steps_report_excluded_channels():
     """Test that steps include excluded_channels in their preprocessing_steps report."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -171,7 +171,7 @@ def test_preprocessing_steps_report_excluded_channels():
 
 def test_apply_excluded_channels_implementation():
     """Test the implementation of _apply_excluded_channels."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -198,7 +198,7 @@ def test_apply_excluded_channels_implementation():
 
 def test_excluded_channels_documentation():
     """Test that excluded_channels is documented in docstrings."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -215,7 +215,7 @@ def test_excluded_channels_documentation():
 
 def test_steps_without_excluded_channels():
     """Test that steps where exclusion doesn't make sense are not modified."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     

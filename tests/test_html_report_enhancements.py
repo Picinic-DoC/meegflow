@@ -15,7 +15,7 @@ repo_root = Path(__file__).parent.parent
 src_dir = repo_root / "src"
 sys.path.insert(0, str(src_dir))
 
-from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+from meegflow import MEEGFlowPipeline
 from readers import BIDSReader
 
 
@@ -62,7 +62,7 @@ def test_bad_channels_topoplot_generation():
         
         # Initialize pipeline
         reader = BIDSReader(bids_root)
-        pipeline = EEGPreprocessingPipeline(reader=reader)
+        pipeline = MEEGFlowPipeline(reader=reader)
         
         # Create mock data dictionary with preprocessing steps that have bad channels
         data = {
@@ -112,7 +112,7 @@ def test_preprocessing_steps_table_generation():
         
         # Initialize pipeline
         reader = BIDSReader(bids_root)
-        pipeline = EEGPreprocessingPipeline(reader=reader)
+        pipeline = MEEGFlowPipeline(reader=reader)
         
         # Create mock data dictionary with preprocessing steps
         data = {
@@ -190,7 +190,7 @@ def test_html_report_without_bad_channels():
         
         # Initialize pipeline
         reader = BIDSReader(bids_root)
-        pipeline = EEGPreprocessingPipeline(reader=reader)
+        pipeline = MEEGFlowPipeline(reader=reader)
         
         # Create mock data dictionary
         data = {
