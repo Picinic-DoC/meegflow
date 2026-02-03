@@ -15,7 +15,7 @@ repo_root = Path(__file__).parent.parent
 src_dir = repo_root / "src"
 sys.path.insert(0, str(src_dir))
 
-from eeg_preprocessing_pipeline import MEEGFlowPipeline
+from meegflow import MEEGFlowPipeline
 from readers import BIDSReader
 
 
