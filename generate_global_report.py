@@ -255,7 +255,7 @@ def _compute_subject_erp_plot(
 
 
     # Choose topomap times
-    times = [0.2, 0.3, 0.6]
+    times = [0.170, 0.3, 0.6]
 
     # Joint plot (butterfly + topo) like MNE report
     fig = evoked.plot_joint(
