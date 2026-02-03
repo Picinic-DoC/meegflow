@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 try:
     import mne
     from mne.utils import logger
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     from readers import BIDSReader
     MNE_AVAILABLE = True
 except ImportError as e:

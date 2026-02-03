@@ -24,14 +24,14 @@ sys.path.insert(0, str(src_dir))
 
 def test_progress_bar_imports():
     """Test that rich progress bar imports are present."""
-    from eeg_preprocessing_pipeline import Progress, SpinnerColumn, TextColumn, BarColumn
+    from meegflow import Progress, SpinnerColumn, TextColumn, BarColumn
     
     print("✓ Rich progress bar components imported successfully")
 
 
 def test_logger_import():
     """Test that MNE logger is imported."""
-    from eeg_preprocessing_pipeline import logger
+    from meegflow import logger
     from cli import logger as cli_logger
     
     print("✓ MNE logger imported in pipeline and CLI")
@@ -53,11 +53,11 @@ def test_cli_log_file_argument():
 
 def test_run_pipeline_creates_progress():
     """Test that run_pipeline creates progress bars."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     import inspect
     
     # Check that Progress is imported and used in run_pipeline
-    source = inspect.getsource(EEGPreprocessingPipeline.run_pipeline)
+    source = inspect.getsource(MEEGFlowPipeline.run_pipeline)
     
     assert 'Progress' in source, "run_pipeline should use Progress class"
     assert 'progress.add_task' in source, "run_pipeline should add tasks to progress"
@@ -68,10 +68,10 @@ def test_run_pipeline_creates_progress():
 
 def test_process_single_recording_accepts_progress():
     """Test that _process_single_recording accepts progress parameters."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     import inspect
     
-    sig = inspect.signature(EEGPreprocessingPipeline._process_single_recording)
+    sig = inspect.signature(MEEGFlowPipeline._process_single_recording)
     params = list(sig.parameters.keys())
     
     assert 'progress' in params, "_process_single_recording should accept 'progress' parameter"
@@ -82,11 +82,11 @@ def test_process_single_recording_accepts_progress():
 
 def test_logger_in_process_single_recording():
     """Test that _process_single_recording uses logger."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     
     # Check that logger.info is called in the method
     import inspect
-    source = inspect.getsource(EEGPreprocessingPipeline._process_single_recording)
+    source = inspect.getsource(MEEGFlowPipeline._process_single_recording)
     
     assert 'logger.info' in source, "_process_single_recording should use logger.info"
     

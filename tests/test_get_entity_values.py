@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for _get_entity_values function in EEGPreprocessingPipeline.
+Tests for _get_entity_values function in MEEGFlowPipeline.
 
 This test verifies that:
 1. _get_entity_values returns the input value when it's a string
@@ -49,13 +49,13 @@ def create_mock_bids_dataset(bids_root):
 
 def test_get_entity_values_with_string():
     """Test that _get_entity_values returns a list when given a string."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     from readers import BIDSReader
     
     with tempfile.TemporaryDirectory() as tmpdir:
         bids_root = Path(tmpdir)
         reader = BIDSReader(bids_root)
-        pipeline = EEGPreprocessingPipeline(reader=reader, config={})
+        pipeline = MEEGFlowPipeline(reader=reader, config={})
         
         result = pipeline._get_entity_values('subject', '01')
         assert result == ['01'], f"Expected ['01'], got {result}"
@@ -65,13 +65,13 @@ def test_get_entity_values_with_string():
 
 def test_get_entity_values_with_list():
     """Test that _get_entity_values returns the list when given a list."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     from readers import BIDSReader
     
     with tempfile.TemporaryDirectory() as tmpdir:
         bids_root = Path(tmpdir)
         reader = BIDSReader(bids_root)
-        pipeline = EEGPreprocessingPipeline(reader=reader, config={})
+        pipeline = MEEGFlowPipeline(reader=reader, config={})
         
         result = pipeline._get_entity_values('subject', ['01', '02', '03'])
         assert result == ['01', '02', '03'], f"Expected ['01', '02', '03'], got {result}"
@@ -81,13 +81,13 @@ def test_get_entity_values_with_list():
 
 def test_get_entity_values_with_none_returns_all_subjects():
     """Test that _get_entity_values returns all subjects when input is None."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     from readers import BIDSReader
     
     with tempfile.TemporaryDirectory() as tmpdir:
         bids_root = create_mock_bids_dataset(tmpdir)
         reader = BIDSReader(bids_root)
-        pipeline = EEGPreprocessingPipeline(reader=reader, config={})
+        pipeline = MEEGFlowPipeline(reader=reader, config={})
         
         result = pipeline._get_entity_values('subject', None)
         assert isinstance(result, list), f"Expected list, got {type(result)}"
@@ -98,13 +98,13 @@ def test_get_entity_values_with_none_returns_all_subjects():
 
 def test_get_entity_values_with_none_returns_all_tasks():
     """Test that _get_entity_values returns all tasks when input is None."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     from readers import BIDSReader
     
     with tempfile.TemporaryDirectory() as tmpdir:
         bids_root = create_mock_bids_dataset(tmpdir)
         reader = BIDSReader(bids_root)
-        pipeline = EEGPreprocessingPipeline(reader=reader, config={})
+        pipeline = MEEGFlowPipeline(reader=reader, config={})
         
         result = pipeline._get_entity_values('task', None)
         assert isinstance(result, list), f"Expected list, got {type(result)}"
@@ -115,13 +115,13 @@ def test_get_entity_values_with_none_returns_all_tasks():
 
 def test_get_entity_values_with_none_returns_all_sessions():
     """Test that _get_entity_values returns all sessions when input is None."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     from readers import BIDSReader
     
     with tempfile.TemporaryDirectory() as tmpdir:
         bids_root = create_mock_bids_dataset(tmpdir)
         reader = BIDSReader(bids_root)
-        pipeline = EEGPreprocessingPipeline(reader=reader, config={})
+        pipeline = MEEGFlowPipeline(reader=reader, config={})
         
         result = pipeline._get_entity_values('session', None)
         assert isinstance(result, list), f"Expected list, got {type(result)}"
@@ -132,7 +132,7 @@ def test_get_entity_values_with_none_returns_all_sessions():
 
 def test_get_entity_values_with_none_empty_dataset():
     """Test that _get_entity_values returns [None] when no values found."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     from readers import BIDSReader
     
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -141,7 +141,7 @@ def test_get_entity_values_with_none_empty_dataset():
         bids_root.mkdir(exist_ok=True)
         
         reader = BIDSReader(bids_root)
-        pipeline = EEGPreprocessingPipeline(reader=reader, config={})
+        pipeline = MEEGFlowPipeline(reader=reader, config={})
         
         result = pipeline._get_entity_values('subject', None)
         assert result == [None], f"Expected [None] for empty dataset, got {result}"
@@ -151,13 +151,13 @@ def test_get_entity_values_with_none_empty_dataset():
 
 def test_get_entity_values_invalid_type():
     """Test that _get_entity_values raises ValueError for invalid input types."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     from readers import BIDSReader
     
     with tempfile.TemporaryDirectory() as tmpdir:
         bids_root = Path(tmpdir)
         reader = BIDSReader(bids_root)
-        pipeline = EEGPreprocessingPipeline(reader=reader, config={})
+        pipeline = MEEGFlowPipeline(reader=reader, config={})
         
         try:
             result = pipeline._get_entity_values('subject', 123)

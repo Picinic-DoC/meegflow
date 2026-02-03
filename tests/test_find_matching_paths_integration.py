@@ -23,10 +23,10 @@ sys.path.insert(0, str(src_dir))
 
 def test_run_pipeline_signature():
     """Test that run_pipeline has the correct signature matching find_matching_paths."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     import inspect
     
-    sig = inspect.signature(EEGPreprocessingPipeline.run_pipeline)
+    sig = inspect.signature(MEEGFlowPipeline.run_pipeline)
     params = list(sig.parameters.keys())
     
     # Check that the new parameters are present
@@ -88,10 +88,10 @@ def test_cli_has_new_arguments():
 
 def test_subjects_parameter_accepts_none():
     """Test that subjects parameter can be None."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     import inspect
     
-    sig = inspect.signature(EEGPreprocessingPipeline.run_pipeline)
+    sig = inspect.signature(MEEGFlowPipeline.run_pipeline)
     subjects_param = sig.parameters['subjects']
     
     # Check that default is None
@@ -102,10 +102,10 @@ def test_subjects_parameter_accepts_none():
 
 def test_tasks_parameter_accepts_none():
     """Test that tasks parameter can be None."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     import inspect
     
-    sig = inspect.signature(EEGPreprocessingPipeline.run_pipeline)
+    sig = inspect.signature(MEEGFlowPipeline.run_pipeline)
     tasks_param = sig.parameters['tasks']
     
     # Check that default is None

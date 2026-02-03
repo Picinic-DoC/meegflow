@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Integration test for readers with EEGPreprocessingPipeline.
+Integration test for readers with MEEGFlowPipeline.
 
 This test verifies that both BIDS and Glob readers work correctly
 when integrated with the full pipeline.
@@ -67,7 +67,7 @@ def create_mock_glob_dataset(data_root):
 
 def test_pipeline_with_bids_reader():
     """Test that pipeline works with BIDSReader."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     from readers import BIDSReader
     
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -75,7 +75,7 @@ def test_pipeline_with_bids_reader():
         
         # Create a BIDS reader and pass it to the pipeline
         reader = BIDSReader(bids_root)
-        pipeline = EEGPreprocessingPipeline(reader=reader, config={})
+        pipeline = MEEGFlowPipeline(reader=reader, config={})
         
         # Verify the reader is a BIDSReader
         assert isinstance(pipeline.reader, BIDSReader), \
@@ -96,7 +96,7 @@ def test_pipeline_with_bids_reader():
 
 def test_pipeline_with_glob_reader():
     """Test that pipeline works with GlobReader."""
-    from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+    from meegflow import MEEGFlowPipeline
     from readers import GlobReader
     
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -107,7 +107,7 @@ def test_pipeline_with_glob_reader():
         reader = GlobReader(data_root, pattern)
         
         # Create pipeline with glob reader
-        pipeline = EEGPreprocessingPipeline(
+        pipeline = MEEGFlowPipeline(
             reader=reader,
             config={}
         )

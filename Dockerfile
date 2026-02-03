@@ -39,7 +39,7 @@ RUN if [ -n "$PIP_TRUSTED_HOST" ]; then \
     fi
 
 # Set the entrypoint to the CLI command
-ENTRYPOINT ["eeg-preprocess"]
+ENTRYPOINT ["meegflow"]
 
 # Default command (shows help if no arguments provided)
 CMD ["--help"]

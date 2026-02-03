@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Command-Line Interface for EEG Preprocessing Pipeline.
+Command-Line Interface for MEEGFlow Preprocessing Pipeline.
 
-This module provides a command-line interface for running the EEG preprocessing
+This module provides a command-line interface for running the MEEG preprocessing
 pipeline on datasets. It supports both BIDS-formatted datasets and custom glob
 pattern matching for flexible file discovery.
 
@@ -65,11 +65,11 @@ import json
 import yaml
 from pathlib import Path
 from mne.utils import logger, set_log_file, set_log_level
-from eeg_preprocessing_pipeline import EEGPreprocessingPipeline
+from meegflow import MEEGFlowPipeline
 from utils import NpEncoder
 
 def _parse_args():
-    parser = argparse.ArgumentParser(description='Run EEG preprocessing pipeline on one or more subjects.')
+    parser = argparse.ArgumentParser(description='Run MEEG preprocessing pipeline on one or more subjects.')
     parser.add_argument('--bids-root', required=False, help='Path to BIDS root (required for BIDS reader).')
     parser.add_argument('--output-root', required=False, help='Path to output derivatives root.')
     
@@ -151,7 +151,7 @@ def main():
         with open(args.config, 'r') as f:
             config = yaml.safe_load(f)
 
-    logger.info("Starting EEG preprocessing pipeline")
+    logger.info("Starting MEEGFlow preprocessing pipeline")
     
     # Create the appropriate reader
     if args.reader == 'bids':
@@ -189,7 +189,7 @@ def main():
         logger.info(f"  {arg}: {value}")
     
     # Create pipeline with reader
-    pipeline = EEGPreprocessingPipeline(
+    pipeline = MEEGFlowPipeline(
         reader=reader,
         output_root=args.output_root, 
         config=config

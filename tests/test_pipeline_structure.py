@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Basic structure tests for the EEG preprocessing pipeline.
+Basic structure tests for the MEEGFlow preprocessing pipeline.
 
-This file tests the pipeline structure without requiring actual EEG data
+This file tests the pipeline structure without requiring actual MEEG data
 or full MNE installation.
 """
 
@@ -19,14 +19,14 @@ configs_dir = repo_root / "configs"
 
 def test_pipeline_file_exists():
     """Test that the main pipeline file exists."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     assert pipeline_file.exists(), "Pipeline file does not exist"
     print("✓ Pipeline file exists")
 
 
 def test_pipeline_syntax():
     """Test that the pipeline file has valid Python syntax."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -39,17 +39,17 @@ def test_pipeline_syntax():
 
 def test_pipeline_has_required_classes():
     """Test that the pipeline file contains required classes."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
-    assert "class EEGPreprocessingPipeline" in code, "EEGPreprocessingPipeline class not found"
-    print("✓ Required class EEGPreprocessingPipeline found")
+    assert "class MEEGFlowPipeline" in code, "MEEGFlowPipeline class not found"
+    print("✓ Required class MEEGFlowPipeline found")
 
 
 def test_pipeline_has_required_methods():
     """Test that the pipeline class has required methods."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -124,7 +124,7 @@ def test_requirements_file_exists():
 
 def test_output_directories_structure():
     """Test that the pipeline creates correct output directory structure."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -160,7 +160,7 @@ def test_readme_exists():
 
 def test_batch_processing_support():
     """Test that the pipeline supports batch processing."""
-    pipeline_file = src_dir / "eeg_preprocessing_pipeline.py"
+    pipeline_file = src_dir / "meegflow.py"
     with open(pipeline_file, 'r') as f:
         code = f.read()
     
@@ -174,7 +174,7 @@ def test_batch_processing_support():
 def run_all_tests():
     """Run all tests."""
     print("=" * 60)
-    print("Running EEG Preprocessing Pipeline Structure Tests")
+    print("Running MEEGFlow Preprocessing Pipeline Structure Tests")
     print("=" * 60)
     print()
     
@@ -214,7 +214,7 @@ def run_all_tests():
         print()
         print("Note: Full functionality testing requires:")
         print("  - Installing dependencies (pip install -r requirements.txt)")
-        print("  - BIDS-formatted EEG data")
+        print("  - BIDS-formatted MEEG data")
         return 0
 
 
