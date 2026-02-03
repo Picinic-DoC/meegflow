@@ -15,6 +15,11 @@ pipeline:
   - name: notch_filter
     freqs: [50.0, 100.0]
 
+  - name: resample
+    instance: epochs
+    sfreq: 250.0
+    npad: auto
+
   - name: find_events
     get_events_from: stim_channel
     stim_channel: 'STI 014'
@@ -36,7 +41,6 @@ pipeline:
       LSGD: 40   # Local Standard Global Deviant
       LDGD: 50   # Local Deviant Global Deviant
       LDGS: 60   # Local Deviant Global Standard
-      
 
   - name: find_bads_channels_threshold
     apply_on: ['epochs']
@@ -68,11 +72,6 @@ pipeline:
 
   - name: interpolate_bad_channels
     instance: epochs
-
-  - name: resample
-    instance: epochs
-    sfreq: 250.0
-    npad: auto
 
   - name: save_clean_instance
     instance: epochs
