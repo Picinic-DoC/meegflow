@@ -238,6 +238,22 @@ def _compute_subject_erp_plot(
         evoked = evokeds[0].copy()
         evoked.data = data
 
+        # ---- Option A: keep equal averaging across conditions, but display an integer N ----
+    # naves are integers (number of epochs per condition)
+    n_by_cond = {c: int(ev.nave) for c, ev in zip(conds_present, evokeds)}
+    n_total = int(sum(n_by_cond.values()))
+
+    # MNE may create a non-integer "equivalent nave" after combine_evoked.
+    # For QC display, we override nave to a meaningful integer.
+    evoked.nave = n_total
+
+    # (Optional but recommended) make the title explicit about the Ns
+    # Example: "N_total=199; N_by_cond: CR=70, ..."
+    n_by_cond_str = ", ".join([f"{k}={v}" for k, v in n_by_cond.items()])
+    title = f"{title} | N_total={n_total} ({n_by_cond_str})"
+
+
+
     # Choose topomap times
     times = [0.2, 0.3, 0.6]
 
