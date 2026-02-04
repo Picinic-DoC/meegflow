@@ -21,13 +21,23 @@ A modular, configuration-driven MEEG preprocessing pipeline using MNE-BIDS. The 
 
 ## Installation
 
-### Option 1: Docker (Recommended)
+### Option 1: From PyPI (Recommended once published)
 
-Using Docker is the easiest way to get started, as it includes all dependencies and system libraries.
+The easiest way to install MEEGFlow is from PyPI:
+
+```bash
+pip install meegflow
+```
+
+This will install MEEGFlow and all its dependencies. You can then use the `meegflow` command directly.
+
+### Option 2: Docker
+
+Using Docker includes all dependencies and system libraries in an isolated environment.
 
 1. Build the Docker image:
 ```bash
-git clone https://github.com/Laouen/meegflow.git
+git clone https://github.com/Picinic-DoC/meegflow.git
 cd meegflow
 docker build -t meegflow .
 ```
@@ -41,11 +51,11 @@ docker run --rm -v /path/to/bids/data:/data meegflow \
     --config /app/configs/config_example.yaml
 ```
 
-### Option 2: Local Installation
+### Option 3: Local Development Installation
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/Laouen/meegflow.git
+git clone https://github.com/Picinic-DoC/meegflow.git
 cd meegflow
 ```
 

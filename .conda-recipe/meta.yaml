@@ -1,0 +1,55 @@
+{% set name = "meegflow" %}
+{% set version = "0.1.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/meegflow-{{ version }}.tar.gz
+  sha256: {{ sha256 }}
+
+build:
+  number: 0
+  noarch: python
+  script: {{ PYTHON }} -m pip install . -vv
+  entry_points:
+    - meegflow=cli:main
+
+requirements:
+  host:
+    - python >=3.8
+    - pip
+    - setuptools
+  run:
+    - python >=3.8
+    - mne >=1.5.0
+    - mne-bids >=0.14
+    - numpy >=1.24.0
+    - scipy >=1.11.0
+    - pyyaml >=6.0
+    - rich >=13.0.0
+    - scikit-learn >=1.8.0
+    - matplotlib >=3.7.0
+    - pandas >=2.0.0
+
+test:
+  imports:
+    - meegflow
+    - cli
+  commands:
+    - meegflow --help
+
+about:
+  home: https://github.com/Picinic-DoC/meegflow
+  license: MIT
+  license_file: LICENSE
+  summary: A modular, configuration-driven MEEG preprocessing pipeline using MNE-BIDS
+  description: |
+    MEEGFlow is a configuration-driven EEG preprocessing pipeline built on MNE and MNE-BIDS.
+    It provides a flexible way to define preprocessing pipelines using YAML configuration files.
+  dev_url: https://github.com/Picinic-DoC/meegflow
+
+extra:
+  recipe-maintainers:
+    - add-your-github-username-here
