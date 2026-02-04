@@ -15,11 +15,6 @@ pipeline:
   - name: notch_filter
     freqs: [50.0, 100.0]
 
-  - name: resample
-    instance: epochs
-    sfreq: 250.0
-    npad: auto
-
   - name: find_events
     get_events_from: stim_channel
     stim_channel: 'STI 014'
@@ -72,6 +67,11 @@ pipeline:
 
   - name: interpolate_bad_channels
     instance: epochs
+
+  - name: resample
+    instance: raw
+    sfreq: 250.0
+    npad: auto
 
   - name: save_clean_instance
     instance: epochs
