@@ -1450,8 +1450,6 @@ class MEEGFlowPipeline:
             data[instance], picks, zscore_thresh, max_iter
         )
 
-        bad_chs = [data[instance].ch_names[ch_idx] for ch_idx in [1,5,8]]
-
         # Mark channels as bad
         if bad_chs:
             for instance_to_apply in apply_on:
