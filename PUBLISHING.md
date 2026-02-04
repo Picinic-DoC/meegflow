@@ -96,7 +96,8 @@ The conda recipe (`.conda-recipe/meta.yaml`) includes:
    - PATCH: Bug fixes
 
 2. Before pushing to `main`:
-   - Update version in `setup.py`
+   - Update version in `pyproject.toml`
+   - Update version in `setup.py` (optional, but recommended for backwards compatibility)
    - Update version in `.conda-recipe/meta.yaml` (for reference)
    - Commit the version bump
    - Push to `main`
@@ -142,8 +143,14 @@ meegflow --help
 
 3. **Build fails**:
    - Check that all files are included properly
-   - Verify `setup.py` is correct
+   - Verify `pyproject.toml` and `setup.py` are correct
    - Test locally with `python -m build`
+
+4. **"twine check" warnings about metadata 2.4**:
+   - Current versions of twine may show warnings about `license-file` or `license-expression` fields
+   - This is a known compatibility issue with metadata format 2.4
+   - PyPI itself accepts metadata 2.4, so these warnings can be safely ignored
+   - The GitHub Actions workflow doesn't use `twine check` before publishing
 
 ### Conda-Forge Issues
 
