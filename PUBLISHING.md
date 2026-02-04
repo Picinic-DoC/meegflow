@@ -2,18 +2,39 @@
 
 This document explains how the automatic publishing workflows are set up and how to maintain them.
 
+## Publishing Strategies
+
+This repository supports two publishing strategies:
+
+1. **Automatic on Push to Main** (`.github/workflows/publish-pypi.yml`):
+   - Publishes to PyPI on every push to the `main` branch
+   - Good for continuous deployment and rapid iteration
+   - Requires careful version management
+
+2. **Tag-Based Releases** (`.github/workflows/publish-release.yml`) **[RECOMMENDED]**:
+   - Publishes to PyPI only when you create a version tag (e.g., `v0.1.0`)
+   - Also creates a GitHub Release with release notes
+   - More controlled release process
+   - Better for production releases
+
+**Recommendation**: Use the tag-based approach for stable releases. You can disable the push-to-main workflow if you prefer manual control over releases.
+
 ## PyPI Publishing
 
 ### How It Works
 
-The repository is configured to automatically publish to PyPI whenever code is pushed to the `main` branch. The workflow uses PyPI's [Trusted Publishing](https://docs.pypi.org/trusted-publishers/) feature, which is more secure than using API tokens.
+The repository uses PyPI's [Trusted Publishing](https://docs.pypi.org/trusted-publishers/) feature, which is more secure than using API tokens. Both workflows use the same authentication mechanism.
 
 ### Setup Steps
+
+#### For Both Workflows
 
 1. **Configure PyPI Trusted Publishing** (one-time setup):
    - Go to https://pypi.org/manage/account/publishing/
    - Log in with your PyPI account (you must be an owner or maintainer of the package)
    - Click "Add a new pending publisher"
+   
+   **For push-to-main workflow**:
    - Fill in:
      - PyPI Project Name: `meegflow`
      - Owner: `Picinic-DoC` (the GitHub organization/user)
@@ -21,26 +42,78 @@ The repository is configured to automatically publish to PyPI whenever code is p
      - Workflow name: `publish-pypi.yml`
      - Environment name: (leave blank)
    - Click "Add"
+   
+   **For tag-based workflow** (add a second publisher):
+   - Fill in:
+     - PyPI Project Name: `meegflow`
+     - Owner: `Picinic-DoC`
+     - Repository name: `meegflow`
+     - Workflow name: `publish-release.yml`
+     - Environment name: (leave blank)
+   - Click "Add"
 
 2. **First Publication**:
-   - The first time you push to `main`, the workflow will fail if the package doesn't exist on PyPI yet
+   - The first time a workflow runs, it may fail if the package doesn't exist on PyPI yet
    - You may need to manually publish the first version using `python -m build` and `twine upload dist/*`
    - Alternatively, PyPI will create the project automatically when the trusted publisher credentials are configured
 
-3. **Versioning**:
-   - The version is defined in `setup.py` (currently `0.1.0`)
-   - Before pushing to `main`, update the version number in `setup.py`
-   - The workflow will skip publishing if a version already exists (using `skip-existing: true`)
+#### Using Tag-Based Releases (Recommended)
+
+To publish a new version using the tag-based workflow:
+
+1. Update the version in `pyproject.toml` and commit:
+   ```bash
+   # Edit pyproject.toml to update version = "0.2.0"
+   git add pyproject.toml
+   git commit -m "Bump version to 0.2.0"
+   git push origin main
+   ```
+
+2. Create and push a version tag:
+   ```bash
+   git tag -a v0.2.0 -m "Release version 0.2.0"
+   git push origin v0.2.0
+   ```
+
+3. The workflow will automatically:
+   - Build the package
+   - Publish to PyPI
+   - Create a GitHub Release with automatically generated release notes
+
+#### Using Push-to-Main (Alternative)
+
+If you prefer automatic publishing on every merge to main:
+
+1. Update the version in `pyproject.toml`
+2. Commit and push to `main`
+3. The workflow will automatically build and publish
+
+**Note**: The workflow uses `skip-existing: true` so it won't fail if you push without updating the version, but no new release will be created.
+
+### Disabling a Workflow
+
+If you want to use only one publishing strategy:
+
+- To disable push-to-main: Delete or rename `.github/workflows/publish-pypi.yml`
+- To disable tag-based: Delete or rename `.github/workflows/publish-release.yml`
 
 ### Workflow Details
 
-The workflow (`.github/workflows/publish-pypi.yml`) performs these steps:
+**Push-to-Main Workflow** (`.github/workflows/publish-pypi.yml`):
 1. Checks out the code
 2. Sets up Python 3.11
 3. Installs build tools (`build` and `twine`)
 4. Builds the distribution packages (wheel and source distribution)
 5. Validates the distribution with `twine check`
 6. Publishes to PyPI using OIDC authentication
+
+**Tag-Based Release Workflow** (`.github/workflows/publish-release.yml`):
+1. Checks out the code
+2. Sets up Python 3.11
+3. Installs build tools (`build` and `twine`)
+4. Builds the distribution packages
+5. Publishes to PyPI using OIDC authentication
+6. Creates a GitHub Release with the built artifacts and auto-generated release notes
 
 ## Conda-Forge Publishing
 
@@ -95,18 +168,19 @@ The conda recipe (`.conda-recipe/meta.yaml`) includes:
    - MINOR: New features (backwards compatible)
    - PATCH: Bug fixes
 
-2. Before pushing to `main`:
+2. **For Tag-Based Releases** (recommended):
    - Update version in `pyproject.toml`
    - Update version in `setup.py` (optional, but recommended for backwards compatibility)
    - Update version in `.conda-recipe/meta.yaml` (for reference)
+   - Commit the version bump to `main`
+   - Create and push a version tag (see instructions above)
+
+3. **For Push-to-Main Releases**:
+   - Update version in `pyproject.toml`
+   - Update version in `setup.py` (optional)
+   - Update version in `.conda-recipe/meta.yaml` (for reference)
    - Commit the version bump
    - Push to `main`
-
-3. Consider using git tags:
-   ```bash
-   git tag -a v0.1.0 -m "Release version 0.1.0"
-   git push origin v0.1.0
-   ```
 
 ## Testing Before Publishing
 
