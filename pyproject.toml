@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meegflow"
+version = "0.1.0"
+description = "A modular, configuration-driven MEEG preprocessing pipeline using MNE-BIDS"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    {name = "MEEGFlow Team"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+    "mne>=1.5.0",
+    "mne-bids>=0.14",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "PyYAML>=6.0",
+    "rich>=13.0.0",
+    "scikit-learn>=1.8.0",
+    "matplotlib>=3.7.0",
+    "pandas>=2.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Picinic-DoC/meegflow"
+Repository = "https://github.com/Picinic-DoC/meegflow"
+
+[project.scripts]
+meegflow = "cli:main"
+
+[tool.setuptools]
+py-modules = ["cli", "meegflow", "adaptive_reject", "readers", "report", "utils"]
+
+[tool.setuptools.package-dir]
+"" = "src"
